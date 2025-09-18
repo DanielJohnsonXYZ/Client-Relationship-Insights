@@ -24,7 +24,34 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
+  const [userProfile, setUserProfile] = useState<any>(null)
+  const [profileLoading, setProfileLoading] = useState(true)
   const { showToast, ToastContainer } = useToast()
+
+  // Check if user has completed onboarding
+  useEffect(() => {
+    if (status === 'authenticated') {
+      fetchUserProfile()
+    }
+  }, [status])
+
+  const fetchUserProfile = async () => {
+    try {
+      const response = await fetch('/api/onboarding')
+      if (response.ok) {
+        const data = await response.json()
+        setUserProfile(data.profile)
+        if (!data.profile?.onboarding_completed) {
+          router.push('/onboarding')
+          return
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch user profile:', error)
+    } finally {
+      setProfileLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -116,12 +143,17 @@ export default function Dashboard() {
     }
   }, [])
 
-  if (status === 'loading') {
+  if (status === 'loading' || profileLoading) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>
   }
 
   if (!session) {
     return null
+  }
+
+  // If no user profile or onboarding not completed, redirect handled in useEffect
+  if (!userProfile?.onboarding_completed) {
+    return <div className="min-h-screen flex items-center justify-center">Redirecting to onboarding...</div>
   }
 
   return (
