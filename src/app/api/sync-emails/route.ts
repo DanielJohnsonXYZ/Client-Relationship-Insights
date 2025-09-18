@@ -21,8 +21,9 @@ export async function POST(request: NextRequest) {
     let emails
     try {
       emails = await fetchRecentEmails(user.accessToken, days)
-    } catch (_error) {
-      throw createAPIError('Failed to fetch emails from Gmail API', 503, 'GMAIL_ERROR')
+    } catch (gmailError) {
+      const errorMessage = `Failed to fetch emails from Gmail API: ${gmailError instanceof Error ? gmailError.message : 'Unknown error'}`
+      throw createAPIError(errorMessage, 503, 'GMAIL_ERROR')
     }
 
     if (!emails || emails.length === 0) {

@@ -39,7 +39,10 @@ export async function GET(_request: NextRequest) {
       .limit(100)
 
     if (error) {
-      throw createAPIError('Failed to fetch insights', 500, 'DATABASE_ERROR')
+      // Include the actual Supabase error for debugging
+      const errorMessage = `Failed to fetch insights: ${error.message || 'Unknown database error'}`
+      const errorCode = error.code || 'DATABASE_ERROR'
+      throw createAPIError(errorMessage, 500, errorCode)
     }
 
     return NextResponse.json({ insights: insights || [] })

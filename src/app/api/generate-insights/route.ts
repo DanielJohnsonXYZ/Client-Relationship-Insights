@@ -115,7 +115,9 @@ export async function POST(request: NextRequest) {
       .limit(50)
 
     if (emailsError) {
-      throw createAPIError('Failed to fetch emails from database', 500, 'DATABASE_ERROR')
+      const errorMessage = `Failed to fetch emails from database: ${emailsError.message || 'Unknown database error'}`
+      const errorCode = emailsError.code || 'DATABASE_ERROR'
+      throw createAPIError(errorMessage, 500, errorCode)
     }
 
     if (!emails || emails.length === 0) {
