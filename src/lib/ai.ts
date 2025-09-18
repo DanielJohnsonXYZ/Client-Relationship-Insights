@@ -1,4 +1,5 @@
 import Anthropic from '@anthropic-ai/sdk'
+import { sanitizeForAI } from './validation'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -21,13 +22,16 @@ export interface InsightResult {
 }
 
 export async function generateInsights(emails: EmailContext[]): Promise<InsightResult[]> {
-  const emailContext = emails.map((email, index) => 
+  // Validate and sanitize email context
+  const sanitizedEmails = emails.slice(0, 10) // Limit to 10 emails per thread
+  
+  const emailContext = sanitizedEmails.map((email, index) => 
     `EMAIL ${index + 1}:
-From: ${email.from_email}
-To: ${email.to_email}
-Subject: ${email.subject}
+From: ${sanitizeForAI(email.from_email)}
+To: ${sanitizeForAI(email.to_email)}
+Subject: ${sanitizeForAI(email.subject)}
 Date: ${email.timestamp}
-Body: ${email.body}
+Body: ${sanitizeForAI(email.body)}
 ---`
   ).join('\n\n')
 

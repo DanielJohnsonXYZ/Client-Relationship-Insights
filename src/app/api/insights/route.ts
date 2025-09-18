@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { supabase } from '@/lib/supabase'
+import { supabaseServer } from '@/lib/supabase-server'
+import { getAuthenticatedUser } from '@/lib/auth'
+import { handleAPIError } from '@/lib/errors'
 
 export async function GET(request: NextRequest) {
   try {
-    const session = await getServerSession()
-    
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
+    const user = await getAuthenticatedUser()
 
-    const { data: insights, error } = await supabase
+    const { data: insights, error } = await supabaseServer
       .from('insights')
       .select(`
         id,
@@ -20,8 +17,10 @@ export async function GET(request: NextRequest) {
         suggested_action,
         confidence,
         feedback,
-        created_at
+        created_at,
+        emails!inner(user_id)
       `)
+      .eq('emails.user_id', user.id)
       .order('created_at', { ascending: false })
 
     if (error) {
@@ -32,10 +31,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ insights: insights || [] })
 
   } catch (error) {
-    console.error('Error in insights API:', error)
+    const { statusCode, userMessage } = handleAPIError(error)
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: userMessage },
+      { status: statusCode }
     )
   }
 }

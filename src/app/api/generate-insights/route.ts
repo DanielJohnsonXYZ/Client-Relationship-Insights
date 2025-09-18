@@ -1,19 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { supabase } from '@/lib/supabase'
+import { supabaseServer } from '@/lib/supabase-server'
 import { generateInsights } from '@/lib/ai'
+import { getAuthenticatedUser } from '@/lib/auth'
+import { handleAPIError, ExternalServiceError } from '@/lib/errors'
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession()
-    
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
+    const user = await getAuthenticatedUser()
 
-    const { data: emails, error: emailsError } = await supabase
+    const { data: emails, error: emailsError } = await supabaseServer
       .from('emails')
       .select('*')
+      .eq('user_id', user.id)
       .order('timestamp', { ascending: false })
       .limit(50)
 
@@ -51,12 +49,17 @@ export async function POST(request: NextRequest) {
         timestamp: email.timestamp
       }))
 
-      const insights = await generateInsights(emailContext)
+      let insights
+      try {
+        insights = await generateInsights(emailContext)
+      } catch (error) {
+        throw new ExternalServiceError('Claude AI', 'Failed to generate insights')
+      }
 
       for (const insight of insights) {
         const mostRecentEmail = threadEmails[0]
         
-        const { error: insertError } = await supabase
+        const { error: insertError } = await supabaseServer
           .from('insights')
           .insert({
             email_id: mostRecentEmail.id,
@@ -84,10 +87,10 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error generating insights:', error)
+    const { statusCode, userMessage } = handleAPIError(error)
     return NextResponse.json(
-      { error: 'Failed to generate insights' },
-      { status: 500 }
+      { error: userMessage },
+      { status: statusCode }
     )
   }
 }

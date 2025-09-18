@@ -1,4 +1,5 @@
 import { google } from 'googleapis'
+import { sanitizeEmailContent, validateEmailAddress, validateGmailId } from './validation'
 
 export async function getGmailClient(accessToken: string) {
   const oauth2Client = new google.auth.OAuth2()
@@ -51,15 +52,27 @@ export async function fetchRecentEmails(accessToken: string, days: number = 30) 
           }
         }
 
-        body = body.replace(/\r?\n/g, '\n').trim()
+        // Validate and sanitize email data
+        if (!validateGmailId(message.id!)) {
+          console.warn('Invalid Gmail ID, skipping email')
+          continue
+        }
+
+        const sanitizedBody = sanitizeEmailContent(body)
+        
+        // Skip emails with invalid email addresses
+        if (!validateEmailAddress(from) || !validateEmailAddress(to)) {
+          console.warn('Invalid email addresses, skipping email')
+          continue
+        }
 
         emails.push({
           gmail_id: message.id!,
           thread_id: emailData.data.threadId || message.id!,
           from_email: from,
           to_email: to,
-          subject,
-          body,
+          subject: subject.substring(0, 500), // Limit subject length
+          body: sanitizedBody,
           timestamp: new Date(date).toISOString(),
         })
 

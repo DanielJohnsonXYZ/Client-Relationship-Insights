@@ -1,33 +1,33 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
 import { fetchRecentEmails } from '@/lib/gmail'
-import { supabase } from '@/lib/supabase'
+import { supabaseServer } from '@/lib/supabase-server'
+import { getAuthenticatedUser } from '@/lib/auth'
+import { handleAPIError, ExternalServiceError } from '@/lib/errors'
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession()
-    
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
+    const user = await getAuthenticatedUser()
 
-    // @ts-ignore
-    const accessToken = session.accessToken
-    
-    if (!accessToken) {
-      return NextResponse.json({ error: 'No access token' }, { status: 401 })
+    let emails
+    try {
+      emails = await fetchRecentEmails(user.accessToken)
+    } catch (error) {
+      throw new ExternalServiceError('Gmail', 'Failed to fetch emails from Gmail API')
     }
-
-    const emails = await fetchRecentEmails(accessToken)
     
     let inserted = 0
     let skipped = 0
 
     for (const email of emails) {
       try {
-        const { error } = await supabase
+        const emailWithUser = {
+          ...email,
+          user_id: user.id
+        }
+
+        const { error } = await supabaseServer
           .from('emails')
-          .upsert(email, { onConflict: 'gmail_id' })
+          .upsert(emailWithUser, { onConflict: 'user_id,gmail_id' })
 
         if (error) {
           console.error('Error inserting email:', error)
@@ -48,10 +48,10 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('Error syncing emails:', error)
+    const { statusCode, userMessage } = handleAPIError(error)
     return NextResponse.json(
-      { error: 'Failed to sync emails' },
-      { status: 500 }
+      { error: userMessage },
+      { status: statusCode }
     )
   }
 }

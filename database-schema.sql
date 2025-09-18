@@ -1,14 +1,16 @@
 -- Create emails table
 CREATE TABLE emails (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  gmail_id VARCHAR(255) UNIQUE NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  gmail_id VARCHAR(255) NOT NULL,
   thread_id VARCHAR(255) NOT NULL,
   from_email VARCHAR(255) NOT NULL,
   to_email VARCHAR(255) NOT NULL,
   subject TEXT,
   body TEXT NOT NULL,
   timestamp TIMESTAMPTZ NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE(user_id, gmail_id)
 );
 
 -- Create insights table
@@ -25,8 +27,10 @@ CREATE TABLE insights (
 );
 
 -- Create indexes for better performance
+CREATE INDEX idx_emails_user_id ON emails(user_id);
 CREATE INDEX idx_emails_thread_id ON emails(thread_id);
 CREATE INDEX idx_emails_timestamp ON emails(timestamp);
+CREATE INDEX idx_emails_user_thread ON emails(user_id, thread_id);
 CREATE INDEX idx_insights_email_id ON insights(email_id);
 CREATE INDEX idx_insights_category ON insights(category);
 CREATE INDEX idx_insights_created_at ON insights(created_at);
@@ -35,6 +39,16 @@ CREATE INDEX idx_insights_created_at ON insights(created_at);
 ALTER TABLE emails ENABLE ROW LEVEL SECURITY;
 ALTER TABLE insights ENABLE ROW LEVEL SECURITY;
 
--- Create policies (for now, allow all operations - tighten in production)
-CREATE POLICY "Allow all operations on emails" ON emails FOR ALL USING (true);
-CREATE POLICY "Allow all operations on insights" ON insights FOR ALL USING (true);
+-- Create secure RLS policies
+CREATE POLICY "Users can only access their own emails" ON emails
+  FOR ALL USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can only access their own insights" ON insights
+  FOR ALL USING (
+    auth.uid() = (
+      SELECT user_id FROM emails WHERE emails.id = insights.email_id
+    )
+  );
+
+-- Migration script for existing data (run after schema update)
+-- UPDATE emails SET user_id = (SELECT id FROM auth.users LIMIT 1) WHERE user_id IS NULL;

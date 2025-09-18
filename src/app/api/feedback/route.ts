@@ -1,23 +1,36 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
-import { supabase } from '@/lib/supabase'
+import { supabaseServer } from '@/lib/supabase-server'
+import { getAuthenticatedUser } from '@/lib/auth'
+import { feedbackSchema } from '@/lib/validation'
+import { handleAPIError, ValidationError, AuthorizationError } from '@/lib/errors'
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession()
-    
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 })
-    }
+    const user = await getAuthenticatedUser()
 
     const body = await request.json()
-    const { insightId, feedback } = body
-
-    if (!insightId || !feedback || !['positive', 'negative'].includes(feedback)) {
-      return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
+    
+    // Validate input
+    const validation = feedbackSchema.safeParse(body)
+    if (!validation.success) {
+      throw new ValidationError('Invalid feedback data', validation.error.issues)
     }
 
-    const { error } = await supabase
+    const { insightId, feedback } = validation.data
+
+    // Verify the insight belongs to the user
+    const { data: insight, error: fetchError } = await supabaseServer
+      .from('insights')
+      .select('id, emails!inner(user_id)')
+      .eq('id', insightId)
+      .eq('emails.user_id', user.id)
+      .single()
+
+    if (fetchError || !insight) {
+      throw new AuthorizationError('Insight not found or access denied')
+    }
+
+    const { error } = await supabaseServer
       .from('insights')
       .update({ feedback })
       .eq('id', insightId)
@@ -30,10 +43,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ success: true })
 
   } catch (error) {
-    console.error('Error in feedback API:', error)
+    const { statusCode, userMessage } = handleAPIError(error)
     return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
+      { error: userMessage },
+      { status: statusCode }
     )
   }
 }
