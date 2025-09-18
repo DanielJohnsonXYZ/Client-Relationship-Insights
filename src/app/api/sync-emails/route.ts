@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchRecentEmails } from '@/lib/gmail'
-import { supabaseServer } from '@/lib/supabase-server'
+import { getSupabaseServer } from '@/lib/supabase-server'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { handleAPIError, ExternalServiceError } from '@/lib/errors'
 
@@ -25,7 +25,8 @@ export async function POST(request: NextRequest) {
           user_id: user.id
         }
 
-        const { error } = await supabaseServer
+        const supabase = getSupabaseServer()
+        const { error } = await (supabase as any)
           .from('emails')
           .upsert(emailWithUser, { onConflict: 'user_id,gmail_id' })
 

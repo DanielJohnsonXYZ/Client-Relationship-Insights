@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server'
-import { supabaseServer } from '@/lib/supabase-server'
+import { getSupabaseServer } from '@/lib/supabase-server'
 
 export async function GET() {
   try {
     // Check database connectivity
-    const { data, error } = await supabaseServer
+    const supabase = getSupabaseServer()
+    const { data, error } = await supabase
       .from('emails')
       .select('count')
       .limit(1)

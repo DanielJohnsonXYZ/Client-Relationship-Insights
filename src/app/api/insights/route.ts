@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseServer } from '@/lib/supabase-server'
+import { getSupabaseServer } from '@/lib/supabase-server'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { handleAPIError } from '@/lib/errors'
 
@@ -7,7 +7,8 @@ export async function GET(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser()
 
-    const { data: insights, error } = await supabaseServer
+    const supabase = getSupabaseServer()
+    const { data: insights, error } = await supabase
       .from('insights')
       .select(`
         id,

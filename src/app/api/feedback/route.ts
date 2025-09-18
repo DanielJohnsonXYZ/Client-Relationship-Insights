@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseServer } from '@/lib/supabase-server'
+import { getSupabaseServer } from '@/lib/supabase-server'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { feedbackSchema } from '@/lib/validation'
 import { handleAPIError, ValidationError, AuthorizationError } from '@/lib/errors'
@@ -19,7 +19,8 @@ export async function POST(request: NextRequest) {
     const { insightId, feedback } = validation.data
 
     // Verify the insight belongs to the user
-    const { data: insight, error: fetchError } = await supabaseServer
+    const supabase = getSupabaseServer()
+    const { data: insight, error: fetchError } = await supabase
       .from('insights')
       .select('id, emails!inner(user_id)')
       .eq('id', insightId)
@@ -30,7 +31,7 @@ export async function POST(request: NextRequest) {
       throw new AuthorizationError('Insight not found or access denied')
     }
 
-    const { error } = await supabaseServer
+    const { error } = await (supabase as any)
       .from('insights')
       .update({ feedback })
       .eq('id', insightId)

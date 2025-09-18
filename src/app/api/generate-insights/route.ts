@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { supabaseServer } from '@/lib/supabase-server'
+import { getSupabaseServer } from '@/lib/supabase-server'
 import { generateInsights } from '@/lib/ai'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { handleAPIError, ExternalServiceError } from '@/lib/errors'
@@ -18,7 +18,8 @@ export async function POST(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser()
 
-    const { data: emails, error: emailsError } = await supabaseServer
+    const supabase = getSupabaseServer()
+    const { data: emails, error: emailsError } = await supabase
       .from('emails')
       .select('*')
       .eq('user_id', user.id)
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
 
     const threadGroups = new Map()
     
-    for (const email of emails) {
+    for (const email of emails as Email[]) {
       if (!threadGroups.has(email.thread_id)) {
         threadGroups.set(email.thread_id, [])
       }
@@ -69,7 +70,7 @@ export async function POST(request: NextRequest) {
       for (const insight of insights) {
         const mostRecentEmail = threadEmails[0]
         
-        const { error: insertError } = await supabaseServer
+        const { error: insertError } = await (supabase as any)
           .from('insights')
           .insert({
             email_id: mostRecentEmail.id,
