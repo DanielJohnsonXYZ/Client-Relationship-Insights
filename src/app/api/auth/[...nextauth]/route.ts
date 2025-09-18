@@ -34,19 +34,16 @@ export const authOptions: NextAuthOptions = {
       if (token.expiresAt && Date.now() > (token.expiresAt as number)) {
         console.warn('Access token expired, invalidating session')
         // Clear the expired token to force re-authentication
-        return {
-          ...token,
-          accessToken: null,
-          error: 'TokenExpired'
-        }
+        token.accessToken = undefined
+        token.error = 'TokenExpired'
       }
       
       return token
     },
     async session({ session, token }) {
-      // If token is expired or has error, return null to force sign out
+      // If token is expired or has error, return basic session without access token
       if (token.error === 'TokenExpired' || !token.accessToken) {
-        return null
+        return session
       }
       
       return {
