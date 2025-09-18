@@ -191,7 +191,10 @@ export default function ClientsPage() {
                 Back to Dashboard
               </button>
               <button
-                onClick={() => setShowAddForm(true)}
+                onClick={() => {
+                  console.log('Add Client clicked, showAddForm will be:', !showAddForm)
+                  setShowAddForm(true)
+                }}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
               >
                 Add Client

@@ -28,16 +28,17 @@ function getAuthOptionsInternal(): NextAuthOptions {
         }
         
         if (token.expiresAt && Date.now() > (token.expiresAt as number)) {
-          console.warn('Access token expired, invalidating session')
-          token.accessToken = undefined
-          token.error = 'TokenExpired'
+          console.warn('Access token expired, requesting fresh sign-in')
+          // Return empty token to force sign out
+          return {}
         }
         
         return token
       },
       async session({ session, token }) {
-        if (token.error === 'TokenExpired' || !token.accessToken) {
-          return session
+        if (!token.accessToken) {
+          // No access token means user needs to sign in again
+          return null as any
         }
         
         return {
