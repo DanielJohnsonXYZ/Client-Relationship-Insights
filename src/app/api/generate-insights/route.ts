@@ -4,6 +4,16 @@ import { generateInsights } from '@/lib/ai'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { handleAPIError, ExternalServiceError } from '@/lib/errors'
 
+interface Email {
+  id: string
+  thread_id: string
+  subject: string
+  from_email: string
+  to_email: string
+  body: string
+  timestamp: string
+}
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser()
@@ -41,7 +51,7 @@ export async function POST(request: NextRequest) {
     for (const [threadId, threadEmails] of threadGroups) {
       if (threadEmails.length < 2) continue
 
-      const emailContext = threadEmails.map(email => ({
+      const emailContext = threadEmails.map((email: Email) => ({
         subject: email.subject,
         from_email: email.from_email,
         to_email: email.to_email,

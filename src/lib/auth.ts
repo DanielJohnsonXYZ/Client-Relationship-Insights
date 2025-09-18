@@ -31,7 +31,7 @@ export async function getAuthenticatedUser() {
   }
 }
 
-export function validateSession(session: unknown) {
+export function validateSession(session: any) {
   if (!session?.user?.email) {
     return { valid: false, error: 'Not authenticated' }
   }
