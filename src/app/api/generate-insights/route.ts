@@ -139,7 +139,7 @@ export async function POST(request: NextRequest) {
     let totalInsights = 0
 
     for (const [, threadEmails] of threadGroups) {
-      if (threadEmails.length < 2) continue
+      // Process all emails, including single emails that can contain valuable insights
 
       const emailContext = threadEmails.map((email: EmailRecord) => ({
         subject: email.subject,
