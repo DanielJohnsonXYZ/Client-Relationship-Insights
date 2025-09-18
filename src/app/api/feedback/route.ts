@@ -4,6 +4,9 @@ import { getAuthenticatedUser } from '@/lib/auth'
 import { feedbackSchema } from '@/lib/validation'
 import { handleAPIError, ValidationError, AuthorizationError } from '@/lib/errors'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser()
@@ -33,7 +36,7 @@ export async function POST(request: NextRequest) {
 
     const { error } = await (supabase as any)
       .from('insights')
-      .update({ feedback })
+      .update({ feedback: feedback })
       .eq('id', insightId)
 
     if (error) {
@@ -42,12 +45,8 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ success: true })
-
   } catch (error) {
-    const { statusCode, userMessage } = handleAPIError(error)
-    return NextResponse.json(
-      { error: userMessage },
-      { status: statusCode }
-    )
+    console.error('API Error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

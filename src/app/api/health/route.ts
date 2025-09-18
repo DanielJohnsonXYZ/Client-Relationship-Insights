@@ -1,68 +1,35 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase-server'
 
-export async function GET() {
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
+export async function GET(request: NextRequest) {
   try {
-    // Check database connectivity
     const supabase = getSupabaseServer()
+    
+    // Test database connection
     const { data, error } = await supabase
       .from('emails')
       .select('count')
       .limit(1)
 
-    if (error) {
-      return NextResponse.json(
-        { 
-          status: 'error',
-          message: 'Database connection failed',
-          timestamp: new Date().toISOString()
-        },
-        { status: 503 }
-      )
-    }
-
-    // Check environment variables
-    const requiredEnvVars = [
-      'NEXT_PUBLIC_SUPABASE_URL',
-      'NEXT_PUBLIC_SUPABASE_ANON_KEY', 
-      'SUPABASE_SERVICE_ROLE_KEY',
-      'NEXTAUTH_SECRET',
-      'GOOGLE_CLIENT_ID',
-      'GOOGLE_CLIENT_SECRET',
-      'ANTHROPIC_API_KEY'
-    ]
-
-    const missingEnvVars = requiredEnvVars.filter(envVar => !process.env[envVar])
-
-    if (missingEnvVars.length > 0) {
-      return NextResponse.json(
-        {
-          status: 'error',
-          message: 'Missing environment variables',
-          missing: missingEnvVars,
-          timestamp: new Date().toISOString()
-        },
-        { status: 503 }
-      )
-    }
-
+    const dbStatus = error ? 'error' : 'healthy'
+    
     return NextResponse.json({
       status: 'healthy',
-      message: 'All systems operational',
       timestamp: new Date().toISOString(),
-      version: '1.0.0',
+      services: {
+        database: dbStatus,
+        api: 'healthy'
+      },
       environment: process.env.NODE_ENV
     })
-
   } catch (error) {
-    console.error('Health check failed:', error)
-    return NextResponse.json(
-      {
-        status: 'error',
-        message: 'Health check failed',
-        timestamp: new Date().toISOString()
-      },
-      { status: 500 }
-    )
+    return NextResponse.json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      error: 'Health check failed'
+    }, { status: 500 })
   }
 }

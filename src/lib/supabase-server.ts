@@ -1,18 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
+import { getServerEnv } from './env'
 
 let cachedServerClient: ReturnType<typeof createClient> | null = null
 
 export function getSupabaseServer() {
   if (cachedServerClient) return cachedServerClient
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const { supabaseUrl, supabaseAnonKey } = getServerEnv()
 
-  if (!supabaseUrl || !supabaseServiceKey) {
-    throw new Error('Missing Supabase environment variables')
-  }
-
-  cachedServerClient = createClient(supabaseUrl, supabaseServiceKey, {
+  cachedServerClient = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false

@@ -3,6 +3,9 @@ import { getSupabaseServer } from '@/lib/supabase-server'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { handleAPIError } from '@/lib/errors'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser()
@@ -23,6 +26,7 @@ export async function GET(request: NextRequest) {
       `)
       .eq('emails.user_id', user.id)
       .order('created_at', { ascending: false })
+      .limit(100)
 
     if (error) {
       console.error('Error fetching insights:', error)
@@ -30,12 +34,8 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ insights: insights || [] })
-
   } catch (error) {
-    const { statusCode, userMessage } = handleAPIError(error)
-    return NextResponse.json(
-      { error: userMessage },
-      { status: statusCode }
-    )
+    console.error('API Error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -4,6 +4,9 @@ import { getSupabaseServer } from '@/lib/supabase-server'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { handleAPIError, ExternalServiceError } from '@/lib/errors'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser()
@@ -14,9 +17,18 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       throw new ExternalServiceError('Gmail', 'Failed to fetch emails from Gmail API')
     }
-    
+
+    if (!emails || emails.length === 0) {
+      return NextResponse.json({ 
+        success: true, 
+        message: 'No new emails found' 
+      })
+    }
+
     let inserted = 0
     let skipped = 0
+
+    const supabase = getSupabaseServer()
 
     for (const email of emails) {
       try {
@@ -25,7 +37,6 @@ export async function POST(request: NextRequest) {
           user_id: user.id
         }
 
-        const supabase = getSupabaseServer()
         const { error } = await (supabase as any)
           .from('emails')
           .upsert(emailWithUser, { onConflict: 'user_id,gmail_id' })
@@ -42,17 +53,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `Synced ${inserted} emails, skipped ${skipped}`,
-      total: emails.length
+    return NextResponse.json({ 
+      success: true, 
+      message: `Synced ${inserted} emails, skipped ${skipped}` 
     })
-
   } catch (error) {
-    const { statusCode, userMessage } = handleAPIError(error)
-    return NextResponse.json(
-      { error: userMessage },
-      { status: statusCode }
-    )
+    console.error('API Error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

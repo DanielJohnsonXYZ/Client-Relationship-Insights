@@ -52,7 +52,9 @@ export async function middleware(request: NextRequest) {
   // Apply rate limiting to API routes
   if (pathname.startsWith('/api/')) {
     const token = await getToken({ req: request })
-    const userId = token?.userId || request.headers.get('x-forwarded-for') || 'anonymous'
+    const fwd = request.headers.get('x-forwarded-for')
+    const ip = fwd?.split(',')[0]?.trim()
+    const userId = token?.userId || ip || 'anonymous'
     
     // Different limits for different endpoints
     const limits = {
