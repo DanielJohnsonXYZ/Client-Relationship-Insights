@@ -181,7 +181,13 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <div className="flex space-x-4 mb-6">
+          <div className="flex flex-wrap gap-4 mb-6">
+            <button
+              onClick={() => router.push('/clients')}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md"
+            >
+              👥 Manage Clients
+            </button>
             <button
               onClick={syncEmails}
               disabled={syncing}
