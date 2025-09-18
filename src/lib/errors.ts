@@ -23,7 +23,7 @@ export class AuthorizationError extends APIError {
 }
 
 export class ValidationError extends APIError {
-  constructor(message: string, details?: any) {
+  constructor(message: string, details?: unknown) {
     super(message, 400, 'The request contains invalid data')
     if (details) {
       this.userMessage = `Invalid input: ${details}`
