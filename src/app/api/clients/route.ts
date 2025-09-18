@@ -10,13 +10,13 @@ export const dynamic = 'force-dynamic'
 
 const clientSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  company: z.string().optional(),
-  email: z.string().email().optional().or(z.literal('')),
-  domain: z.string().optional(),
+  company: z.string().optional().nullable(),
+  email: z.string().email().optional().or(z.literal('')).nullable(),
+  domain: z.string().optional().nullable(),
   status: z.enum(['active', 'prospective', 'at_risk', 'completed', 'inactive']),
   relationship_health: z.number().min(1).max(5),
-  current_project: z.string().optional(),
-  notes: z.string().optional()
+  current_project: z.string().optional().nullable(),
+  notes: z.string().optional().nullable()
 })
 
 export async function GET(request: NextRequest) {
