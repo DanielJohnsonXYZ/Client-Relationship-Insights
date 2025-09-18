@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { sanitizeForAI } from './validation'
+import { APP_CONFIG } from './config'
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY!,
@@ -23,7 +24,7 @@ export interface InsightResult {
 
 export async function generateInsights(emails: EmailContext[]): Promise<InsightResult[]> {
   // Validate and sanitize email context
-  const sanitizedEmails = emails.slice(0, 10) // Limit to 10 emails per thread
+  const sanitizedEmails = emails.slice(0, APP_CONFIG.ai.maxEmailsPerThread)
   
   const emailContext = sanitizedEmails.map((email, index) => 
     `EMAIL ${index + 1}:

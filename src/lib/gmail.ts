@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
 import { sanitizeEmailContent, validateEmailAddress, validateGmailId } from './validation'
+import { APP_CONFIG } from './config'
 
 export async function getGmailClient(accessToken: string) {
   const oauth2Client = new google.auth.OAuth2()
@@ -8,7 +9,7 @@ export async function getGmailClient(accessToken: string) {
   return google.gmail({ version: 'v1', auth: oauth2Client })
 }
 
-export async function fetchRecentEmails(accessToken: string, days: number = 30) {
+export async function fetchRecentEmails(accessToken: string, days: number = APP_CONFIG.gmail.daysToFetch) {
   try {
     const gmail = await getGmailClient(accessToken)
     
@@ -17,7 +18,7 @@ export async function fetchRecentEmails(accessToken: string, days: number = 30) 
     const response = await gmail.users.messages.list({
       userId: 'me',
       q: query,
-      maxResults: 100
+      maxResults: APP_CONFIG.gmail.maxResults
     })
 
     if (!response.data.messages) {
@@ -26,7 +27,7 @@ export async function fetchRecentEmails(accessToken: string, days: number = 30) 
 
     const emails = []
     
-    for (const message of response.data.messages.slice(0, 50)) {
+    for (const message of response.data.messages.slice(0, APP_CONFIG.gmail.processLimit)) {
       try {
         const emailData = await gmail.users.messages.get({
           userId: 'me',

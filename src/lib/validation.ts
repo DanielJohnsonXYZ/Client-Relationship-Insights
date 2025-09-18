@@ -80,6 +80,14 @@ export function sanitizeForAI(text: string): string {
   return text
     .replace(/[<>]/g, '') // Remove HTML
     .replace(/\x00/g, '') // Remove null bytes
+    .replace(/```/g, '') // Remove code blocks that could be prompt injections
+    .replace(/\[INST\]/gi, '') // Remove instruction tokens
+    .replace(/\[\/INST\]/gi, '') // Remove instruction end tokens
+    .replace(/SYSTEM:/gi, '') // Remove system prompts
+    .replace(/USER:/gi, '') // Remove user prompts
+    .replace(/ASSISTANT:/gi, '') // Remove assistant prompts
+    .replace(/Human:/gi, '') // Remove human prompts
+    .replace(/AI:/gi, '') // Remove AI prompts
     .trim()
     .substring(0, 10000) // Limit AI input size
 }

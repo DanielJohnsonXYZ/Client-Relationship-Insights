@@ -2,8 +2,49 @@ import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 import { getToken } from 'next-auth/jwt'
 
-// Rate limiting storage (in production, use Redis or similar)
-const rateLimitMap = new Map<string, { count: number; resetTime: number }>()
+// Edge Runtime compatible rate limiting
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>()
+
+function checkRateLimit(
+  userId: string, 
+  endpoint: string, 
+  maxRequests: number, 
+  windowMs: number
+): { allowed: boolean; remaining: number; resetTime: number } {
+  const key = `${userId}:${endpoint}`
+  const now = Date.now()
+  
+  const existing = rateLimitStore.get(key)
+  
+  if (existing) {
+    if (now < existing.resetTime) {
+      if (existing.count >= maxRequests) {
+        return {
+          allowed: false,
+          remaining: Math.max(0, maxRequests - existing.count),
+          resetTime: existing.resetTime
+        }
+      }
+      
+      existing.count++
+      return {
+        allowed: true,
+        remaining: Math.max(0, maxRequests - existing.count),
+        resetTime: existing.resetTime
+      }
+    }
+  }
+  
+  // Create new rate limit window
+  const newLimit = { count: 1, resetTime: now + windowMs }
+  rateLimitStore.set(key, newLimit)
+  
+  return {
+    allowed: true,
+    remaining: maxRequests - 1,
+    resetTime: newLimit.resetTime
+  }
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
@@ -15,34 +56,34 @@ export async function middleware(request: NextRequest) {
     
     // Different limits for different endpoints
     const limits = {
-      '/api/sync-emails': { requests: 5, window: 60000 }, // 5 requests per minute
-      '/api/generate-insights': { requests: 3, window: 60000 }, // 3 requests per minute
-      '/api/feedback': { requests: 30, window: 60000 }, // 30 requests per minute
-      '/api/insights': { requests: 20, window: 60000 }, // 20 requests per minute
+      '/api/sync-emails': { requests: 5, window: 60000 },
+      '/api/generate-insights': { requests: 3, window: 60000 },
+      '/api/feedback': { requests: 30, window: 60000 },
+      '/api/insights': { requests: 20, window: 60000 },
     }
 
     const limit = Object.entries(limits).find(([path]) => pathname.startsWith(path))?.[1]
     
     if (limit) {
-      const key = `${userId}:${pathname}`
-      const now = Date.now()
-      const userLimit = rateLimitMap.get(key)
+      const rateLimitResult = checkRateLimit(
+        userId, 
+        pathname, 
+        limit.requests, 
+        limit.window
+      )
 
-      if (userLimit) {
-        if (now < userLimit.resetTime) {
-          if (userLimit.count >= limit.requests) {
-            return NextResponse.json(
-              { error: 'Rate limit exceeded. Please try again later.' },
-              { status: 429 }
-            )
-          }
-          userLimit.count++
-        } else {
-          // Reset the rate limit
-          rateLimitMap.set(key, { count: 1, resetTime: now + limit.window })
-        }
-      } else {
-        rateLimitMap.set(key, { count: 1, resetTime: now + limit.window })
+      if (!rateLimitResult.allowed) {
+        const response = NextResponse.json(
+          { error: 'Rate limit exceeded. Please try again later.' },
+          { status: 429 }
+        )
+        
+        // Add rate limit headers
+        response.headers.set('X-RateLimit-Limit', limit.requests.toString())
+        response.headers.set('X-RateLimit-Remaining', rateLimitResult.remaining.toString())
+        response.headers.set('X-RateLimit-Reset', Math.ceil(rateLimitResult.resetTime / 1000).toString())
+        
+        return response
       }
     }
   }

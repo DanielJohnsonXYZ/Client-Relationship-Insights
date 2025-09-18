@@ -2,7 +2,9 @@
 
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
+import { useToast } from '@/components/ui/Toast'
+import { InsightsSkeleton } from '@/components/LoadingSkeleton'
 
 interface Insight {
   id: string
@@ -22,6 +24,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
+  const { showToast, ToastContainer } = useToast()
 
   useEffect(() => {
     if (status === 'unauthenticated') {
@@ -57,12 +60,12 @@ export default function Dashboard() {
       const data = await response.json()
       
       if (response.ok) {
-        alert(data.message)
+        showToast(data.message, 'success')
       } else {
-        alert('Error syncing emails: ' + data.error)
+        showToast('Error syncing emails: ' + data.error, 'error')
       }
     } catch (error) {
-      alert('Error syncing emails')
+      showToast('Error syncing emails', 'error')
     } finally {
       setSyncing(false)
     }
@@ -75,13 +78,13 @@ export default function Dashboard() {
       const data = await response.json()
       
       if (response.ok) {
-        alert(data.message)
+        showToast(data.message, 'success')
         fetchInsights()
       } else {
-        alert('Error generating insights: ' + data.error)
+        showToast('Error generating insights: ' + data.error, 'error')
       }
     } catch (error) {
-      alert('Error generating insights')
+      showToast('Error generating insights', 'error')
     } finally {
       setAnalyzing(false)
     }
@@ -103,15 +106,7 @@ export default function Dashboard() {
     }
   }
 
-  if (status === 'loading') {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
-  }
-
-  if (!session) {
-    return null
-  }
-
-  const getCategoryColor = (category: string) => {
+  const getCategoryColor = useMemo(() => (category: string) => {
     switch (category) {
       case 'Risk': return 'bg-red-100 text-red-800 border-red-200'
       case 'Upsell': return 'bg-green-100 text-green-800 border-green-200'
@@ -119,6 +114,14 @@ export default function Dashboard() {
       case 'Note': return 'bg-blue-100 text-blue-800 border-blue-200'
       default: return 'bg-gray-100 text-gray-800 border-gray-200'
     }
+  }, [])
+
+  if (status === 'loading') {
+    return <div className="min-h-screen flex items-center justify-center">Loading...</div>
+  }
+
+  if (!session) {
+    return null
   }
 
   return (
@@ -165,7 +168,7 @@ export default function Dashboard() {
         </div>
 
         {loading ? (
-          <div className="text-center py-8">Loading insights...</div>
+          <InsightsSkeleton />
         ) : insights.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-gray-600 mb-4">No insights found.</p>
@@ -193,7 +196,7 @@ export default function Dashboard() {
                 <div className="mb-4">
                   <h4 className="text-sm font-medium text-gray-700 mb-1">Evidence:</h4>
                   <p className="text-sm text-gray-600 italic bg-gray-50 p-3 rounded">
-                    "{insight.evidence}"
+                    &quot;{insight.evidence}&quot;
                   </p>
                 </div>
                 
@@ -229,6 +232,7 @@ export default function Dashboard() {
           </div>
         )}
       </main>
+      <ToastContainer />
     </div>
   )
 }
