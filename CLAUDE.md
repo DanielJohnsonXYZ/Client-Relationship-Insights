@@ -58,3 +58,5 @@ The AI analysis (`src/lib/ai.ts`) uses Claude 3.5 Sonnet to analyze email thread
 
 ### Database Setup
 Run the SQL schema in `database-schema.sql` in Supabase SQL Editor to create required tables and security policies.
+
+**Note:** Ensure you're using the correct "Updated Client Relationship Insights" Supabase project.
