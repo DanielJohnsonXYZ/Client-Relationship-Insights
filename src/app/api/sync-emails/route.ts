@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { fetchRecentEmails } from '@/lib/gmail'
 import { getSupabaseServer } from '@/lib/supabase-server'
 import { getAuthenticatedUser } from '@/lib/auth'
-import { handleAPIError, ExternalServiceError } from '@/lib/errors'
+import { handleAPIError, createAPIError } from '@/lib/api-errors'
+import { validateRequest, syncEmailsSchema } from '@/lib/request-validation'
+import type { EmailRecord, SupabaseResponse } from '@/types/database'
+import { logger } from '@/lib/logger'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -10,12 +13,16 @@ export const dynamic = 'force-dynamic'
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser()
+    
+    // Validate request body
+    const body = await request.json().catch(() => ({}))
+    const { days } = validateRequest(syncEmailsSchema, body)
 
     let emails
     try {
-      emails = await fetchRecentEmails(user.accessToken)
-    } catch (error) {
-      throw new ExternalServiceError('Gmail', 'Failed to fetch emails from Gmail API')
+      emails = await fetchRecentEmails(user.accessToken, days)
+    } catch (_error) {
+      throw createAPIError('Failed to fetch emails from Gmail API', 503, 'GMAIL_ERROR')
     }
 
     if (!emails || emails.length === 0) {
@@ -42,13 +49,13 @@ export async function POST(request: NextRequest) {
           .upsert(emailWithUser, { onConflict: 'user_id,gmail_id' })
 
         if (error) {
-          console.error('Error inserting email:', error)
+          logger.warn('Failed to insert email', { error, gmail_id: email.gmail_id })
           skipped++
         } else {
           inserted++
         }
       } catch (error) {
-        console.error('Error processing email:', error)
+        logger.error('Error processing individual email', error)
         skipped++
       }
     }
@@ -58,7 +65,6 @@ export async function POST(request: NextRequest) {
       message: `Synced ${inserted} emails, skipped ${skipped}` 
     })
   } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return handleAPIError(error)
   }
 }

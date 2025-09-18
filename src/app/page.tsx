@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 export default function HomePage() {
   return (
     <div style={{ padding: '2rem', fontFamily: 'system-ui, sans-serif', lineHeight: 1.6 }}>
@@ -6,8 +8,8 @@ export default function HomePage() {
       
       <h2>Application Links</h2>
       <ul>
-        <li><a href="/dashboard" style={{ color: '#0066cc' }}>📊 Dashboard (Main App)</a></li>
-        <li><a href="/api/auth/signin" style={{ color: '#0066cc' }}>🔐 Sign in with Google</a></li>
+        <li><Link href="/dashboard" style={{ color: '#0066cc' }}>📊 Dashboard (Main App)</Link></li>
+        <li><Link href="/api/auth/signin" style={{ color: '#0066cc' }}>🔐 Sign in with Google</Link></li>
         <li><a href="/api/health" style={{ color: '#0066cc' }}>🏥 Health Check</a></li>
       </ul>
       

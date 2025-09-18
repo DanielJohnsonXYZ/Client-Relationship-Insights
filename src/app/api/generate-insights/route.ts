@@ -2,21 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase-server'
 import { getAnthropic } from '@/lib/anthropic'
 import { getAuthenticatedUser } from '@/lib/auth'
-import { handleAPIError, ExternalServiceError } from '@/lib/errors'
+import { handleAPIError, createAPIError } from '@/lib/api-errors'
 import { sanitizeForAI } from '@/lib/validation'
+import { validateRequest, generateInsightsSchema } from '@/lib/request-validation'
+import type { EmailRecord, InsightRecord, SupabaseResponse, SupabaseListResponse } from '@/types/database'
+import { logger } from '@/lib/logger'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
-
-interface Email {
-  id: string
-  thread_id: string
-  subject: string
-  from_email: string
-  to_email: string
-  body: string
-  timestamp: string
-}
 
 interface InsightResult {
   category: 'Risk' | 'Upsell' | 'Alignment' | 'Note'
@@ -99,7 +92,7 @@ Example format:
 
     return []
   } catch (error) {
-    console.error('Error generating insights:', error)
+    logger.error('Failed to generate insights with AI', error)
     return []
   }
 }
@@ -107,9 +100,14 @@ Example format:
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthenticatedUser()
+    
+    // Validate request body
+    const body = await request.json().catch(() => ({}))
+    const { forceRegenerate: _forceRegenerate } = validateRequest(generateInsightsSchema, body)
+    
     const supabase = getSupabaseServer()
 
-    const { data: emails, error: emailsError } = await supabase
+    const { data: emails, error: emailsError }: SupabaseListResponse<EmailRecord> = await supabase
       .from('emails')
       .select('*')
       .eq('user_id', user.id)
@@ -117,8 +115,7 @@ export async function POST(request: NextRequest) {
       .limit(50)
 
     if (emailsError) {
-      console.error('Error fetching emails:', emailsError)
-      return NextResponse.json({ error: 'Failed to fetch emails' }, { status: 500 })
+      throw createAPIError('Failed to fetch emails from database', 500, 'DATABASE_ERROR')
     }
 
     if (!emails || emails.length === 0) {
@@ -130,7 +127,7 @@ export async function POST(request: NextRequest) {
 
     const threadGroups = new Map()
     
-    for (const email of emails as Email[]) {
+    for (const email of emails) {
       if (!threadGroups.has(email.thread_id)) {
         threadGroups.set(email.thread_id, [])
       }
@@ -142,7 +139,7 @@ export async function POST(request: NextRequest) {
     for (const [, threadEmails] of threadGroups) {
       if (threadEmails.length < 2) continue
 
-      const emailContext = threadEmails.map((email: Email) => ({
+      const emailContext = threadEmails.map((email: EmailRecord) => ({
         subject: email.subject,
         from_email: email.from_email,
         to_email: email.to_email,
@@ -153,8 +150,8 @@ export async function POST(request: NextRequest) {
       let insights: InsightResult[]
       try {
         insights = await generateInsights(emailContext)
-      } catch (error) {
-        throw new ExternalServiceError('Claude AI', 'Failed to generate insights')
+      } catch (_error) {
+        throw createAPIError('Failed to generate insights with AI', 503, 'AI_ERROR')
       }
 
       for (const insight of insights) {
@@ -163,7 +160,7 @@ export async function POST(request: NextRequest) {
         const { error: insertError } = await (supabase as any)
           .from('insights')
           .insert({
-            email_id: mostRecentEmail.id,
+            email_id: mostRecentEmail.id!,
             category: insight.category,
             summary: insight.summary,
             evidence: insight.evidence,
@@ -172,7 +169,7 @@ export async function POST(request: NextRequest) {
           })
 
         if (insertError) {
-          console.error('Error inserting insight:', insertError)
+          logger.warn('Failed to insert insight', { error: insertError, email_id: mostRecentEmail.id })
         } else {
           totalInsights++
         }
@@ -184,7 +181,6 @@ export async function POST(request: NextRequest) {
       message: `Generated ${totalInsights} new insights` 
     })
   } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return handleAPIError(error)
   }
 }

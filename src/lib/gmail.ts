@@ -1,5 +1,6 @@
 import { google } from 'googleapis'
 import { sanitizeEmailContent, validateEmailAddress, validateGmailId } from './validation'
+import { logger } from './logger'
 
 // Configuration constants
 const GMAIL_CONFIG = {
@@ -61,7 +62,7 @@ export async function fetchRecentEmails(accessToken: string, days: number = GMAI
 
         // Validate and sanitize email data
         if (!validateGmailId(message.id!)) {
-          console.warn('Invalid Gmail ID, skipping email')
+          logger.warn('Invalid Gmail ID, skipping email', { gmail_id: message.id })
           continue
         }
 
@@ -69,7 +70,7 @@ export async function fetchRecentEmails(accessToken: string, days: number = GMAI
         
         // Skip emails with invalid email addresses
         if (!validateEmailAddress(from) || !validateEmailAddress(to)) {
-          console.warn('Invalid email addresses, skipping email')
+          logger.warn('Invalid email addresses, skipping email', { from, to })
           continue
         }
 
@@ -84,14 +85,14 @@ export async function fetchRecentEmails(accessToken: string, days: number = GMAI
         })
 
       } catch (error) {
-        console.error('Error fetching individual email:', error)
+        logger.error('Error fetching individual email', error, { message_id: message.id })
         continue
       }
     }
 
     return emails
   } catch (error) {
-    console.error('Error fetching Gmail messages:', error)
+    logger.error('Error fetching Gmail messages', error)
     throw new Error('Failed to fetch emails from Gmail')
   }
 }

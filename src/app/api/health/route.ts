@@ -4,12 +4,12 @@ import { getSupabaseServer } from '@/lib/supabase-server'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     const supabase = getSupabaseServer()
     
     // Test database connection
-    const { data, error } = await supabase
+    const { data: _data, error } = await supabase
       .from('emails')
       .select('count')
       .limit(1)
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
       },
       environment: process.env.NODE_ENV
     })
-  } catch (error) {
+  } catch (_error) {
     return NextResponse.json({
       status: 'error',
       timestamp: new Date().toISOString(),

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase-server'
 import { getAuthenticatedUser } from '@/lib/auth'
-import { feedbackSchema } from '@/lib/validation'
-import { handleAPIError, ValidationError, AuthorizationError } from '@/lib/errors'
+import { handleAPIError, createAPIError } from '@/lib/api-errors'
+import { validateRequest, feedbackSchema } from '@/lib/request-validation'
+import type { SupabaseResponse } from '@/types/database'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -12,14 +13,7 @@ export async function POST(request: NextRequest) {
     const user = await getAuthenticatedUser()
 
     const body = await request.json()
-    
-    // Validate input
-    const validation = feedbackSchema.safeParse(body)
-    if (!validation.success) {
-      throw new ValidationError('Invalid feedback data', validation.error.issues)
-    }
-
-    const { insightId, feedback } = validation.data
+    const { insightId, rating } = validateRequest(feedbackSchema, body)
 
     // Verify the insight belongs to the user
     const supabase = getSupabaseServer()
@@ -31,22 +25,24 @@ export async function POST(request: NextRequest) {
       .single()
 
     if (fetchError || !insight) {
-      throw new AuthorizationError('Insight not found or access denied')
+      throw createAPIError('Insight not found or access denied', 404, 'NOT_FOUND')
     }
 
+    // Update insight with feedback
+    const feedbackValue = rating >= 4 ? 'positive' : 'negative'
     const { error } = await (supabase as any)
       .from('insights')
-      .update({ feedback: feedback })
+      .update({
+        feedback: feedbackValue
+      })
       .eq('id', insightId)
 
     if (error) {
-      console.error('Error updating feedback:', error)
-      return NextResponse.json({ error: 'Failed to update feedback' }, { status: 500 })
+      throw createAPIError('Failed to save feedback', 500, 'DATABASE_ERROR')
     }
 
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('API Error:', error)
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return handleAPIError(error)
   }
 }

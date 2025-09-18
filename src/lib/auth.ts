@@ -1,6 +1,6 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth-options'
-import { AuthenticationError } from './errors'
+import { createAPIError } from './api-errors'
 import { Session } from 'next-auth'
 
 export async function getAuthenticatedUser() {
@@ -8,15 +8,15 @@ export async function getAuthenticatedUser() {
     const session = await getServerSession(authOptions)
     
     if (!session?.user?.email) {
-      throw new AuthenticationError('No valid session found')
+      throw createAPIError('No valid session found', 401, 'AUTHENTICATION_ERROR')
     }
 
     if (!session.accessToken) {
-      throw new AuthenticationError('No access token available')
+      throw createAPIError('No access token available', 401, 'ACCESS_TOKEN_ERROR')
     }
 
     if (!session.user.id) {
-      throw new AuthenticationError('Invalid user session')
+      throw createAPIError('Invalid user session', 401, 'INVALID_SESSION')
     }
 
     return {
@@ -25,10 +25,10 @@ export async function getAuthenticatedUser() {
       accessToken: session.accessToken
     }
   } catch (error) {
-    if (error instanceof AuthenticationError) {
+    if (error && typeof error === 'object' && 'statusCode' in error) {
       throw error
     }
-    throw new AuthenticationError('Failed to validate authentication')
+    throw createAPIError('Failed to validate authentication', 401, 'AUTH_VALIDATION_ERROR')
   }
 }
 
