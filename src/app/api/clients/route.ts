@@ -42,11 +42,19 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    console.log('📝 Starting client creation...')
+    
     const user = await getAuthenticatedUser()
+    console.log('✅ User authenticated:', user.id)
+    
     const body = await request.json()
+    console.log('📄 Request body received:', body)
+    
     const clientData = validateRequest(clientSchema, body)
+    console.log('✅ Validation passed')
 
     const supabase = getSupabaseServer()
+    console.log('🔌 Supabase client ready')
 
     // Clean up empty strings
     const cleanedData = {
@@ -57,22 +65,31 @@ export async function POST(request: NextRequest) {
       current_project: clientData.current_project || null,
       notes: clientData.notes || null
     }
+    
+    const insertData = {
+      user_id: user.id,
+      ...cleanedData
+    }
+    
+    console.log('📊 Insert data prepared:', insertData)
 
     const { data, error } = await (supabase as any)
       .from('clients')
-      .insert({
-        user_id: user.id,
-        ...cleanedData
-      })
+      .insert(insertData)
       .select()
       .single()
+      
+    console.log('🔍 Database response - data:', data, 'error:', error)
 
     if (error) {
-      throw createAPIError(`Failed to create client: ${error.message}`, 500, 'DATABASE_ERROR')
+      console.error('❌ Database error details:', error)
+      throw createAPIError(`Failed to create client: ${error.message} (Code: ${error.code})`, 500, error.code || 'DATABASE_ERROR')
     }
 
+    console.log('✅ Client created successfully')
     return NextResponse.json({ client: data })
   } catch (error) {
+    console.error('❌ API Error in POST /api/clients:', error)
     return handleAPIError(error)
   }
 }
