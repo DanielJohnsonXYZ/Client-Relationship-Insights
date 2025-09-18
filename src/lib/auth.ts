@@ -1,6 +1,7 @@
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/app/api/auth/[...nextauth]/route'
 import { AuthenticationError } from './errors'
+import { Session } from 'next-auth'
 
 export async function getAuthenticatedUser() {
   try {
@@ -31,7 +32,7 @@ export async function getAuthenticatedUser() {
   }
 }
 
-export function validateSession(session: any) {
+export function validateSession(session: Session | null) {
   if (!session?.user?.email) {
     return { valid: false, error: 'Not authenticated' }
   }
