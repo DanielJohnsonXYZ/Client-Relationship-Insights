@@ -43,7 +43,7 @@ const AUTOMATED_SUBJECT_PATTERNS = [
 /**
  * Detects if an email is automated/system-generated
  */
-export function isAutomatedEmail(email: EmailRecord): boolean {
+export function isAutomatedEmail(email: { from_email: string; subject?: string; body?: string }): boolean {
   // Check sender email patterns
   const isAutomatedSender = AUTOMATED_EMAIL_PATTERNS.some(pattern => 
     pattern.test(email.from_email)
@@ -70,7 +70,7 @@ export function isAutomatedEmail(email: EmailRecord): boolean {
  * Detects which client an email relates to using multiple strategies
  */
 export async function detectEmailClient(
-  email: EmailRecord, 
+  email: { from_email: string; to_email: string; subject?: string; body: string; id?: string }, 
   userId: string
 ): Promise<ClientDetectionResult> {
   try {
@@ -116,7 +116,7 @@ export async function detectEmailClient(
  * Strategy 1: Find clients by exact email address match
  */
 function findDirectEmailMatch(
-  email: EmailRecord, 
+  email: { from_email: string; to_email: string }, 
   clients: ClientRecord[]
 ): ClientDetectionResult | null {
   for (const client of clients) {
@@ -139,7 +139,7 @@ function findDirectEmailMatch(
  * Strategy 2: Find clients by domain match
  */
 function findDomainMatch(
-  email: EmailRecord, 
+  email: { from_email: string; to_email: string }, 
   clients: ClientRecord[]
 ): ClientDetectionResult | null {
   const getEmailDomain = (emailAddr: string) => {
@@ -186,7 +186,7 @@ function findDomainMatch(
  * Strategy 3: AI-based client detection using email content
  */
 async function performAIClientDetection(
-  email: EmailRecord, 
+  email: { from_email: string; to_email: string; subject?: string; body: string }, 
   clients: ClientRecord[]
 ): Promise<ClientDetectionResult | null> {
   try {
