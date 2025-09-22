@@ -42,17 +42,10 @@ export async function POST(request: NextRequest) {
 
     for (const email of emails) {
       try {
-        // Detect if email is automated
-        const automated = isAutomatedEmail(email)
-        
-        // Detect client for the email
-        const clientDetection = await detectEmailClient(email, user.id)
-        
+        // Temporarily disable client detection until migration is run
         const emailWithMetadata = {
           ...email,
-          user_id: user.id,
-          client_id: clientDetection.client_id,
-          is_automated: automated
+          user_id: user.id
         }
 
         const { error } = await (supabase as any)
@@ -64,15 +57,6 @@ export async function POST(request: NextRequest) {
           skipped++
         } else {
           inserted++
-          if (clientDetection.client_id) {
-            clientDetected++
-            logger.info('Email linked to client', {
-              emailId: email.gmail_id,
-              clientId: clientDetection.client_id,
-              confidence: clientDetection.confidence,
-              reasoning: clientDetection.reasoning
-            })
-          }
         }
       } catch (error) {
         logger.error('Error processing individual email', error)
@@ -82,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      message: `Synced ${inserted} emails, skipped ${skipped}. Linked ${clientDetected} emails to clients.` 
+      message: `Synced ${inserted} emails, skipped ${skipped}.` 
     })
   } catch (error) {
     return handleAPIError(error)

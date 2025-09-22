@@ -143,22 +143,22 @@ export async function POST(request: NextRequest) {
     
     const supabase = getSupabaseServer()
 
-    // Fetch emails with client information, excluding automated emails
-    const { data: emails, error: emailsError }: SupabaseListResponse<EmailRecord & { clients?: ClientRecord }> = await supabase
+    // Fetch emails, excluding automated emails if column exists
+    let emailsQuery = supabase
       .from('emails')
-      .select(`
-        *,
-        clients (
-          id,
-          name,
-          company,
-          current_project
-        )
-      `)
+      .select('*')
       .eq('user_id', user.id)
-      .eq('is_automated', false)
       .order('timestamp', { ascending: false })
       .limit(50)
+
+    // Try to exclude automated emails if the column exists
+    try {
+      emailsQuery = emailsQuery.eq('is_automated', false)
+    } catch {
+      // Column doesn't exist yet, continue without filter
+    }
+
+    const { data: emails, error: emailsError }: SupabaseListResponse<EmailRecord> = await emailsQuery
 
     if (emailsError) {
       const errorMessage = `Failed to fetch emails from database: ${emailsError.message || 'Unknown database error'}`
@@ -187,15 +187,15 @@ export async function POST(request: NextRequest) {
     for (const [, threadEmails] of threadGroups) {
       // Process all emails, including single emails that can contain valuable insights
 
-      const emailContext = threadEmails.map((email: EmailRecord & { clients?: ClientRecord }) => ({
+      const emailContext = threadEmails.map((email: EmailRecord) => ({
         subject: email.subject,
         from_email: email.from_email,
         to_email: email.to_email,
         body: email.body,
         timestamp: email.timestamp,
-        client_name: email.clients?.name,
-        client_company: email.clients?.company,
-        current_project: email.clients?.current_project
+        client_name: undefined, // Will be populated when migration is run
+        client_company: undefined,
+        current_project: undefined
       }))
 
       let result: { insights: InsightResult[], rawOutput: string }
@@ -215,7 +215,6 @@ export async function POST(request: NextRequest) {
             .from('insights')
             .insert({
               email_id: mostRecentEmail.id!,
-              client_id: mostRecentEmail.client_id,
               category: insight.category,
               summary: insight.summary,
               evidence: insight.evidence,
@@ -236,7 +235,6 @@ export async function POST(request: NextRequest) {
           .from('insights')
           .insert({
             email_id: mostRecentEmail.id!,
-            client_id: mostRecentEmail.client_id,
             raw_output: rawOutput
           })
 

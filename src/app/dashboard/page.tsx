@@ -16,12 +16,6 @@ interface Insight {
   feedback?: 'positive' | 'negative' | null
   raw_output?: string
   created_at: string
-  client_id?: string
-  clients?: {
-    id: string
-    name: string
-    company?: string
-  }
 }
 
 interface Client {
@@ -242,24 +236,8 @@ export default function Dashboard() {
           </div>
           
           <div className="flex items-center gap-4 mb-4">
-            <label htmlFor="client-filter" className="text-sm font-medium text-gray-700">
-              Filter by Client:
-            </label>
-            <select
-              id="client-filter"
-              value={selectedClient}
-              onChange={(e) => setSelectedClient(e.target.value)}
-              className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="all">All Clients</option>
-              {clients.map((client) => (
-                <option key={client.id} value={client.id}>
-                  {client.name}{client.company ? ` (${client.company})` : ''}
-                </option>
-              ))}
-            </select>
             <span className="text-sm text-gray-500">
-              {insights.length} insight{insights.length !== 1 ? 's' : ''}
+              {insights.length} insight{insights.length !== 1 ? 's' : ''} found
             </span>
           </div>
         </div>
@@ -281,16 +259,9 @@ export default function Dashboard() {
                   // Structured insight display
                   <>
                     <div className="flex items-start justify-between mb-4">
-                      <div className="flex flex-wrap gap-2">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getCategoryColor(insight.category)}`}>
-                          {insight.category}
-                        </span>
-                        {insight.clients && (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border bg-gray-100 text-gray-800 border-gray-200">
-                            {insight.clients.name}{insight.clients.company ? ` (${insight.clients.company})` : ''}
-                          </span>
-                        )}
-                      </div>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getCategoryColor(insight.category)}`}>
+                        {insight.category}
+                      </span>
                       <div className="text-sm text-gray-500">
                         Confidence: {Math.round((insight.confidence || 0) * 100)}%
                       </div>
@@ -318,16 +289,9 @@ export default function Dashboard() {
                   // Raw output display
                   <>
                     <div className="mb-4">
-                      <div className="flex flex-wrap gap-2">
-                        <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border bg-purple-100 text-purple-800 border-purple-200">
-                          AI Analysis
-                        </span>
-                        {insight.clients && (
-                          <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border bg-gray-100 text-gray-800 border-gray-200">
-                            {insight.clients.name}{insight.clients.company ? ` (${insight.clients.company})` : ''}
-                          </span>
-                        )}
-                      </div>
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border bg-purple-100 text-purple-800 border-purple-200">
+                        AI Analysis
+                      </span>
                     </div>
                     
                     <h3 className="text-lg font-semibold text-gray-900 mb-3">

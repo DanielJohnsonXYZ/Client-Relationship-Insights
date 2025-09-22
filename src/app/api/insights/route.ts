@@ -27,22 +27,16 @@ export async function GET(request: NextRequest) {
         feedback,
         raw_output,
         created_at,
-        client_id,
-        clients (
-          id,
-          name,
-          company
-        ),
         emails!inner(user_id)
       `)
       .eq('emails.user_id', user.id)
       .order('created_at', { ascending: false })
       .limit(100)
 
-    // Filter by client if specified
-    if (clientId && clientId !== 'all') {
-      query = query.eq('client_id', clientId)
-    }
+    // Filter by client if specified (disabled until migration is run)
+    // if (clientId && clientId !== 'all') {
+    //   query = query.eq('client_id', clientId)
+    // }
 
     const { data: insights, error }: SupabaseListResponse<{
       id: string
@@ -54,12 +48,6 @@ export async function GET(request: NextRequest) {
       feedback?: string
       raw_output?: string
       created_at: string
-      client_id?: string
-      clients?: {
-        id: string
-        name: string
-        company?: string
-      }
     }> = await query
 
     if (error) {
