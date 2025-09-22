@@ -311,7 +311,7 @@ export async function batchUpdateEmailClients(userId: string, emailIds?: string[
       const detection = await detectEmailClient(email, userId)
       
       // Update email record
-      const { error: updateError } = await supabase
+      const { error: updateError } = await (supabase as any)
         .from('emails')
         .update({
           client_id: detection.client_id,
