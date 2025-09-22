@@ -5,7 +5,7 @@ import { getAuthenticatedUser } from '@/lib/auth'
 import { handleAPIError, createAPIError } from '@/lib/api-errors'
 import { sanitizeForAI } from '@/lib/validation'
 import { validateRequest, generateInsightsSchema } from '@/lib/request-validation'
-import type { EmailRecord, InsightRecord, SupabaseResponse, SupabaseListResponse } from '@/types/database'
+import type { EmailRecord, InsightRecord, ClientRecord, SupabaseResponse, SupabaseListResponse } from '@/types/database'
 import { logger } from '@/lib/logger'
 
 export const runtime = 'nodejs'
@@ -25,40 +25,67 @@ async function generateInsights(emails: Array<{
   to_email: string
   body: string
   timestamp: string
-}>): Promise<InsightResult[]> {
+  client_name?: string
+  client_company?: string
+  current_project?: string
+}>): Promise<{ insights: InsightResult[], rawOutput: string }> {
   const anthropic = getAnthropic()
   
   // Limit emails for processing
   const sanitizedEmails = emails.slice(0, 10)
   
-  const emailContext = sanitizedEmails.map((email, index) => 
-    `EMAIL ${index + 1}:
+  // Group emails by client and create context
+  const clientGroups = new Map<string, any[]>()
+  sanitizedEmails.forEach(email => {
+    const clientKey = email.client_name || 'Unknown Client'
+    if (!clientGroups.has(clientKey)) {
+      clientGroups.set(clientKey, [])
+    }
+    clientGroups.get(clientKey)!.push(email)
+  })
+
+  const emailContext = Array.from(clientGroups.entries()).map(([clientName, clientEmails]) => {
+    const clientInfo = clientEmails[0]
+    const clientHeader = clientInfo.client_name ? 
+      `CLIENT: ${clientInfo.client_name}${clientInfo.client_company ? ` (${clientInfo.client_company})` : ''}${clientInfo.current_project ? ` - Project: ${clientInfo.current_project}` : ''}` : 
+      'UNIDENTIFIED CLIENT'
+    
+    const emailsForClient = clientEmails.map((email, index) => 
+      `EMAIL ${index + 1}:
 From: ${sanitizeForAI(email.from_email)}
 To: ${sanitizeForAI(email.to_email)}
 Subject: ${sanitizeForAI(email.subject)}
 Date: ${email.timestamp}
 Body: ${sanitizeForAI(email.body)}
 ---`
-  ).join('\n\n')
+    ).join('\n\n')
+    
+    return `${clientHeader}\n${emailsForClient}`
+  }).join('\n\n=== NEW CLIENT ===\n\n')
 
-  const prompt = `You are an AI assistant that analyzes client communications for freelancers and contractors. Analyze the following email thread and identify insights that fall into these categories:
+  const prompt = `You are an AI assistant that analyzes client relationship communications for freelancers and consultants. Your goal is to extract meaningful, actionable insights about client relationships, project status, and business opportunities.
 
-1. **Risk** - Signs of client dissatisfaction, project delays, budget concerns, scope creep, or relationship issues
-2. **Upsell** - Opportunities for additional services, expanded scope, or premium offerings
-3. **Alignment** - Misunderstandings, unclear requirements, or communication gaps that need clarification
-4. **Note** - Important information, deadlines, decisions, or key relationship updates
+Analyze the following email communications and provide insights that help understand:
+- Client satisfaction and relationship health
+- Project progress, blockers, and risks
+- Business opportunities (upsells, renewals, referrals)
+- Important deadlines, decisions, and action items
+- Communication patterns and relationship dynamics
+- Any other relevant business insights
 
-EMAIL THREAD:
+EMAIL COMMUNICATIONS:
 ${emailContext}
 
+BE FLEXIBLE AND INSIGHTFUL: Don't just look for predefined categories. Identify whatever seems important or noteworthy about these client relationships. Focus on actionable insights that would help a business owner manage their client relationships better.
+
 For each insight you identify, provide a JSON object with:
-- category: One of "Risk", "Upsell", "Alignment", or "Note"
-- summary: A concise 1-2 sentence summary of the insight
-- evidence: A direct quote from the email that supports this insight
-- suggested_action: A specific action the freelancer should take
+- category: Choose the most appropriate from "Risk", "Upsell", "Alignment", "Note", or create a custom category if needed
+- summary: A clear, actionable summary of the insight
+- evidence: A direct quote or reference from the email that supports this insight
+- suggested_action: A specific, practical action the user should take
 - confidence: A number between 0 and 1 indicating your confidence in this insight
 
-Return your response as a JSON array of insights. Only return insights that are clearly supported by the email content. Aim for 1-5 insights per thread.
+Return your response as a JSON array of insights. Focus on quality over quantity - provide insights that are genuinely valuable and actionable.
 
 Example format:
 [
@@ -80,20 +107,29 @@ Example format:
 
     const content = message.content[0]
     if (content.type === 'text') {
+      const rawOutput = content.text
+      
       const jsonStart = content.text.indexOf('[')
       const jsonEnd = content.text.lastIndexOf(']') + 1
       
       if (jsonStart !== -1 && jsonEnd !== -1) {
-        const jsonString = content.text.slice(jsonStart, jsonEnd)
-        const insights = JSON.parse(jsonString)
-        return insights
+        try {
+          const jsonString = content.text.slice(jsonStart, jsonEnd)
+          const insights = JSON.parse(jsonString)
+          return { insights, rawOutput }
+        } catch (parseError) {
+          logger.warn('Failed to parse JSON from AI response, storing raw output', { parseError })
+          return { insights: [], rawOutput }
+        }
       }
+      
+      return { insights: [], rawOutput }
     }
 
-    return []
+    return { insights: [], rawOutput: 'No text content received from AI' }
   } catch (error) {
     logger.error('Failed to generate insights with AI', error)
-    return []
+    throw error
   }
 }
 
@@ -107,10 +143,20 @@ export async function POST(request: NextRequest) {
     
     const supabase = getSupabaseServer()
 
-    const { data: emails, error: emailsError }: SupabaseListResponse<EmailRecord> = await supabase
+    // Fetch emails with client information, excluding automated emails
+    const { data: emails, error: emailsError }: SupabaseListResponse<EmailRecord & { clients?: ClientRecord }> = await supabase
       .from('emails')
-      .select('*')
+      .select(`
+        *,
+        clients (
+          id,
+          name,
+          company,
+          current_project
+        )
+      `)
       .eq('user_id', user.id)
+      .eq('is_automated', false)
       .order('timestamp', { ascending: false })
       .limit(50)
 
@@ -141,37 +187,61 @@ export async function POST(request: NextRequest) {
     for (const [, threadEmails] of threadGroups) {
       // Process all emails, including single emails that can contain valuable insights
 
-      const emailContext = threadEmails.map((email: EmailRecord) => ({
+      const emailContext = threadEmails.map((email: EmailRecord & { clients?: ClientRecord }) => ({
         subject: email.subject,
         from_email: email.from_email,
         to_email: email.to_email,
         body: email.body,
-        timestamp: email.timestamp
+        timestamp: email.timestamp,
+        client_name: email.clients?.name,
+        client_company: email.clients?.company,
+        current_project: email.clients?.current_project
       }))
 
-      let insights: InsightResult[]
+      let result: { insights: InsightResult[], rawOutput: string }
       try {
-        insights = await generateInsights(emailContext)
+        result = await generateInsights(emailContext)
       } catch (_error) {
         throw createAPIError('Failed to generate insights with AI', 503, 'AI_ERROR')
       }
 
-      for (const insight of insights) {
-        const mostRecentEmail = threadEmails[0]
-        
+      const { insights, rawOutput } = result
+      const mostRecentEmail = threadEmails[0]
+
+      // If we have structured insights, store them individually
+      if (insights.length > 0) {
+        for (const insight of insights) {
+          const { error: insertError } = await (supabase as any)
+            .from('insights')
+            .insert({
+              email_id: mostRecentEmail.id!,
+              client_id: mostRecentEmail.client_id,
+              category: insight.category,
+              summary: insight.summary,
+              evidence: insight.evidence,
+              suggested_action: insight.suggested_action,
+              confidence: insight.confidence,
+              raw_output: rawOutput
+            })
+
+          if (insertError) {
+            logger.warn('Failed to insert insight', { error: insertError, email_id: mostRecentEmail.id })
+          } else {
+            totalInsights++
+          }
+        }
+      } else {
+        // If no structured insights but we have raw output, store just the raw output
         const { error: insertError } = await (supabase as any)
           .from('insights')
           .insert({
             email_id: mostRecentEmail.id!,
-            category: insight.category,
-            summary: insight.summary,
-            evidence: insight.evidence,
-            suggested_action: insight.suggested_action,
-            confidence: insight.confidence
+            client_id: mostRecentEmail.client_id,
+            raw_output: rawOutput
           })
 
         if (insertError) {
-          logger.warn('Failed to insert insight', { error: insertError, email_id: mostRecentEmail.id })
+          logger.warn('Failed to insert raw insight', { error: insertError, email_id: mostRecentEmail.id })
         } else {
           totalInsights++
         }

@@ -1,6 +1,7 @@
 export interface EmailRecord {
   id?: string
   user_id: string
+  client_id?: string
   gmail_id: string
   thread_id: string
   from_email: string
@@ -8,18 +9,35 @@ export interface EmailRecord {
   subject: string
   body: string
   timestamp: string
+  is_automated?: boolean
   created_at?: string
 }
 
 export interface InsightRecord {
   id?: string
   email_id: string
-  category: 'Risk' | 'Upsell' | 'Alignment' | 'Note'
-  summary: string
-  evidence: string
-  suggested_action: string
-  confidence: number
+  client_id?: string
+  category?: 'Risk' | 'Upsell' | 'Alignment' | 'Note'
+  summary?: string
+  evidence?: string
+  suggested_action?: string
+  confidence?: number
   feedback?: 'positive' | 'negative'
+  raw_output?: string
+  created_at?: string
+}
+
+export interface ClientRecord {
+  id?: string
+  user_id: string
+  name: string
+  company?: string
+  email?: string
+  domain?: string
+  status?: 'Active' | 'Inactive' | 'Prospect'
+  relationship_health?: 'Good' | 'At Risk' | 'Excellent'
+  current_project?: string
+  notes?: string
   created_at?: string
 }
 

@@ -4,6 +4,7 @@ import { getSupabaseServer } from '@/lib/supabase-server'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { handleAPIError, createAPIError } from '@/lib/api-errors'
 import { validateRequest, syncEmailsSchema } from '@/lib/request-validation'
+import { detectEmailClient, isAutomatedEmail } from '@/lib/client-detection'
 import type { EmailRecord, SupabaseResponse } from '@/types/database'
 import { logger } from '@/lib/logger'
 
@@ -35,25 +36,43 @@ export async function POST(request: NextRequest) {
 
     let inserted = 0
     let skipped = 0
+    let clientDetected = 0
 
     const supabase = getSupabaseServer()
 
     for (const email of emails) {
       try {
-        const emailWithUser = {
+        // Detect if email is automated
+        const automated = isAutomatedEmail(email)
+        
+        // Detect client for the email
+        const clientDetection = await detectEmailClient(email, user.id)
+        
+        const emailWithMetadata = {
           ...email,
-          user_id: user.id
+          user_id: user.id,
+          client_id: clientDetection.client_id,
+          is_automated: automated
         }
 
         const { error } = await (supabase as any)
           .from('emails')
-          .upsert(emailWithUser, { onConflict: 'user_id,gmail_id' })
+          .upsert(emailWithMetadata, { onConflict: 'user_id,gmail_id' })
 
         if (error) {
           logger.warn('Failed to insert email', { error, gmail_id: email.gmail_id })
           skipped++
         } else {
           inserted++
+          if (clientDetection.client_id) {
+            clientDetected++
+            logger.info('Email linked to client', {
+              emailId: email.gmail_id,
+              clientId: clientDetection.client_id,
+              confidence: clientDetection.confidence,
+              reasoning: clientDetection.reasoning
+            })
+          }
         }
       } catch (error) {
         logger.error('Error processing individual email', error)
@@ -63,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ 
       success: true, 
-      message: `Synced ${inserted} emails, skipped ${skipped}` 
+      message: `Synced ${inserted} emails, skipped ${skipped}. Linked ${clientDetected} emails to clients.` 
     })
   } catch (error) {
     return handleAPIError(error)
