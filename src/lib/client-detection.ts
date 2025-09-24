@@ -107,7 +107,7 @@ export async function detectEmailClient(
     return { client_id: null, confidence: 0, reasoning: 'No client match found' }
     
   } catch (error) {
-    logger.error('Error in client detection', error, { emailId: email.id })
+    logger.error('Error in client detection', { error, emailId: email.id })
     return { client_id: null, confidence: 0, reasoning: 'Detection error' }
   }
 }
@@ -271,7 +271,7 @@ Only return high-confidence matches (>0.6). If uncertain, return null for client
     return null
     
   } catch (error) {
-    logger.error('AI client detection failed', error)
+    logger.error('AI client detection failed', { error })
     return null
   }
 }
@@ -297,7 +297,7 @@ export async function batchUpdateEmailClients(userId: string, emailIds?: string[
     const { data: emails, error }: SupabaseListResponse<EmailRecord> = await query.limit(50)
     
     if (error || !emails) {
-      logger.error('Failed to fetch emails for client detection', error)
+      logger.error('Failed to fetch emails for client detection', { error })
       return 0
     }
     
@@ -339,7 +339,7 @@ export async function batchUpdateEmailClients(userId: string, emailIds?: string[
     return updatedCount
     
   } catch (error) {
-    logger.error('Batch client detection failed', error)
+    logger.error('Batch client detection failed', { error })
     return 0
   }
 }

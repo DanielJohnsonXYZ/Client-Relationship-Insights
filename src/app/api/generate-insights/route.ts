@@ -189,14 +189,22 @@ export async function POST(request: NextRequest) {
 
       // Get client information if available
       const firstEmail = threadEmails[0]
-      let clientInfo = null
+      let clientName: string | undefined
+      let clientCompany: string | undefined
+      let currentProject: string | undefined
+      
       if (firstEmail.client_id) {
-        const { data: client } = await supabase
+        const { data: client } = await (supabase as any)
           .from('clients')
           .select('name, company, current_project')
           .eq('id', firstEmail.client_id)
           .single()
-        clientInfo = client
+        
+        if (client) {
+          clientName = client.name
+          clientCompany = client.company
+          currentProject = client.current_project
+        }
       }
 
       const emailContext = threadEmails.map((email: EmailRecord) => ({
@@ -205,9 +213,9 @@ export async function POST(request: NextRequest) {
         to_email: email.to_email,
         body: email.body,
         timestamp: email.timestamp,
-        client_name: clientInfo?.name,
-        client_company: clientInfo?.company,
-        current_project: clientInfo?.current_project
+        client_name: clientName,
+        client_company: clientCompany,
+        current_project: currentProject
       }))
 
       let result: { insights: InsightResult[], rawOutput: string }
@@ -224,7 +232,7 @@ export async function POST(request: NextRequest) {
       if (insights.length > 0) {
         for (const insight of insights) {
           // First, check if insight already exists for this email and category
-          const { data: existingInsights } = await supabase
+          const { data: existingInsights } = await (supabase as any)
             .from('insights')
             .select('id')
             .eq('email_id', mostRecentEmail.id!)
@@ -246,7 +254,7 @@ export async function POST(request: NextRequest) {
               .eq('id', existingInsights[0].id)
 
             if (updateError) {
-              logger.warn('Failed to update existing insight', updateError, { email_id: mostRecentEmail.id })
+              logger.warn('Failed to update existing insight', { error: updateError, email_id: mostRecentEmail.id })
             } else {
               totalInsights++
             }
@@ -265,7 +273,7 @@ export async function POST(request: NextRequest) {
               })
 
             if (insertError) {
-              logger.warn('Failed to insert insight', insertError, { email_id: mostRecentEmail.id })
+              logger.warn('Failed to insert insight', { error: insertError, email_id: mostRecentEmail.id })
             } else {
               totalInsights++
             }
@@ -274,7 +282,7 @@ export async function POST(request: NextRequest) {
       } else {
         // If no structured insights but we have raw output, store just the raw output
         // Check if any insight exists for this email first
-        const { data: existingInsights } = await supabase
+        const { data: existingInsights } = await (supabase as any)
           .from('insights')
           .select('id')
           .eq('email_id', mostRecentEmail.id!)
@@ -291,7 +299,7 @@ export async function POST(request: NextRequest) {
             .eq('id', existingInsights[0].id)
 
           if (updateError) {
-            logger.warn('Failed to update raw insight', updateError, { email_id: mostRecentEmail.id })
+            logger.warn('Failed to update raw insight', { error: updateError, email_id: mostRecentEmail.id })
           } else {
             totalInsights++
           }
@@ -305,7 +313,7 @@ export async function POST(request: NextRequest) {
             })
 
           if (insertError) {
-            logger.warn('Failed to insert raw insight', insertError, { email_id: mostRecentEmail.id })
+            logger.warn('Failed to insert raw insight', { error: insertError, email_id: mostRecentEmail.id })
           } else {
             totalInsights++
           }
