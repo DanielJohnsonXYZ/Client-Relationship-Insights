@@ -5,6 +5,10 @@ const nextConfig: NextConfig = {
     // Disable ESLint during builds to prevent warnings from failing deployment
     ignoreDuringBuilds: true,
   },
+  turbopack: {
+    root: process.cwd(),
+  },
+  outputFileTracingRoot: process.cwd(),
   async headers() {
     return [
       {
