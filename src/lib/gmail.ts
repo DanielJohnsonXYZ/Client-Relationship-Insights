@@ -2,11 +2,11 @@ import { google } from 'googleapis'
 import { sanitizeEmailContent, validateEmailAddress, validateGmailId, parseEmailFromHeader } from './validation'
 import { logger } from './logger'
 
-// Configuration constants
+// Configuration constants - increased limits for better insights
 const GMAIL_CONFIG = {
-  daysToFetch: 7,
-  maxResults: 50,
-  processLimit: 50
+  daysToFetch: 30, // Extended to 30 days for more comprehensive analysis
+  maxResults: 500, // Increased to get more emails
+  processLimit: 200 // Process more emails for better insights
 }
 
 export async function getGmailClient(accessToken: string) {
@@ -21,6 +21,7 @@ export async function fetchRecentEmails(accessToken: string, days: number = GMAI
     const gmail = await getGmailClient(accessToken)
     
     const query = `newer_than:${days}d`
+    logger.info('Fetching emails from Gmail', { query, maxResults: GMAIL_CONFIG.maxResults, processLimit: GMAIL_CONFIG.processLimit })
     
     const response = await gmail.users.messages.list({
       userId: 'me',
@@ -29,10 +30,19 @@ export async function fetchRecentEmails(accessToken: string, days: number = GMAI
     })
 
     if (!response.data.messages) {
+      logger.warn('No messages returned from Gmail API')
       return []
     }
 
+    logger.info('Gmail API returned messages', { 
+      totalFound: response.data.messages.length,
+      willProcess: Math.min(response.data.messages.length, GMAIL_CONFIG.processLimit)
+    })
+
     const emails = []
+    let skippedInvalidId = 0
+    let skippedInvalidEmails = 0
+    let skippedInvalidDates = 0
     
     for (const message of response.data.messages.slice(0, GMAIL_CONFIG.processLimit)) {
       try {
@@ -62,7 +72,7 @@ export async function fetchRecentEmails(accessToken: string, days: number = GMAI
 
         // Validate and sanitize email data
         if (!validateGmailId(message.id!)) {
-          logger.warn('Invalid Gmail ID, skipping email', { gmail_id: message.id })
+          skippedInvalidId++
           continue
         }
 
@@ -73,7 +83,8 @@ export async function fetchRecentEmails(accessToken: string, days: number = GMAI
         const toEmail = parseEmailFromHeader(to)
         
         if (!validateEmailAddress(fromEmail) || !validateEmailAddress(toEmail)) {
-          logger.warn('Invalid email addresses, skipping email', { from: fromEmail, to: toEmail })
+          skippedInvalidEmails++
+          logger.debug('Skipped email with invalid addresses', { from: fromEmail, to: toEmail, subject })
           continue
         }
 
@@ -82,7 +93,7 @@ export async function fetchRecentEmails(accessToken: string, days: number = GMAI
         try {
           emailTimestamp = date ? new Date(date).toISOString() : new Date().toISOString()
         } catch (error) {
-          logger.warn('Invalid date header, using current time', { date, error })
+          skippedInvalidDates++
           emailTimestamp = new Date().toISOString()
         }
 
@@ -97,14 +108,22 @@ export async function fetchRecentEmails(accessToken: string, days: number = GMAI
         })
 
       } catch (error) {
-        logger.error('Error fetching individual email', error, { message_id: message.id })
+        logger.error('Error fetching individual email', { error, message_id: message.id })
         continue
       }
     }
 
+    logger.info('Email fetch completed', { 
+      totalProcessed: emails.length,
+      skippedInvalidId,
+      skippedInvalidEmails,
+      skippedInvalidDates,
+      finalCount: emails.length
+    })
+
     return emails
   } catch (error) {
-    logger.error('Error fetching Gmail messages', error)
+    logger.error('Error fetching Gmail messages', { error })
     throw new Error('Failed to fetch emails from Gmail')
   }
 }

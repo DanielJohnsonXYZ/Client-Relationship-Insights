@@ -98,6 +98,15 @@ Example format:
   }
 ]`
 
+  // Log AI input for debugging
+  logger.info('🤖 AI Input', { 
+    promptLength: prompt.length,
+    emailContextLength: emailContext.length,
+    clientCount: clientGroups.size,
+    totalEmails: emails.length,
+    prompt: process.env.NODE_ENV === 'development' ? prompt : '[REDACTED IN PRODUCTION]'
+  })
+
   try {
     const message = await anthropic.messages.create({
       model: 'claude-3-5-sonnet-20241022',
@@ -109,6 +118,12 @@ Example format:
     if (content.type === 'text') {
       const rawOutput = content.text
       
+      // Log AI output for debugging
+      logger.info('🤖 AI Output', { 
+        rawOutputLength: rawOutput.length,
+        rawOutput: process.env.NODE_ENV === 'development' ? rawOutput : '[REDACTED IN PRODUCTION]'
+      })
+      
       const jsonStart = content.text.indexOf('[')
       const jsonEnd = content.text.lastIndexOf(']') + 1
       
@@ -116,16 +131,25 @@ Example format:
         try {
           const jsonString = content.text.slice(jsonStart, jsonEnd)
           const insights = JSON.parse(jsonString)
+          
+          logger.info('🤖 AI Insights Parsed', { 
+            insightCount: insights.length,
+            categories: insights.map((i: any) => i.category),
+            insights: process.env.NODE_ENV === 'development' ? insights : '[REDACTED IN PRODUCTION]'
+          })
+          
           return { insights, rawOutput }
         } catch (parseError) {
-          logger.warn('Failed to parse JSON from AI response, storing raw output', { parseError })
+          logger.warn('Failed to parse JSON from AI response, storing raw output', { parseError, jsonString: content.text.slice(jsonStart, jsonEnd) })
           return { insights: [], rawOutput }
         }
       }
       
+      logger.warn('No JSON found in AI response', { rawOutput })
       return { insights: [], rawOutput }
     }
 
+    logger.warn('No text content received from AI', { contentType: content.type })
     return { insights: [], rawOutput: 'No text content received from AI' }
   } catch (error) {
     logger.error('Failed to generate insights with AI', error)
@@ -143,22 +167,13 @@ export async function POST(request: NextRequest) {
     
     const supabase = getSupabaseServer()
 
-    // Fetch emails, excluding automated emails if column exists
-    let emailsQuery = supabase
+    // Fetch emails - removed is_automated filter since column doesn't exist yet
+    const { data: emails, error: emailsError }: SupabaseListResponse<EmailRecord> = await supabase
       .from('emails')
       .select('*')
       .eq('user_id', user.id)
       .order('timestamp', { ascending: false })
       .limit(50)
-
-    // Try to exclude automated emails if the column exists
-    try {
-      emailsQuery = emailsQuery.eq('is_automated', false)
-    } catch {
-      // Column doesn't exist yet, continue without filter
-    }
-
-    const { data: emails, error: emailsError }: SupabaseListResponse<EmailRecord> = await emailsQuery
 
     if (emailsError) {
       const errorMessage = `Failed to fetch emails from database: ${emailsError.message || 'Unknown database error'}`
@@ -167,10 +182,38 @@ export async function POST(request: NextRequest) {
     }
 
     if (!emails || emails.length === 0) {
-      return NextResponse.json({ 
-        success: true, 
-        message: 'No emails found to analyze' 
-      })
+      return NextResponse.json({
+        success: false,
+        message: 'No emails found to analyze',
+        recommendations: [
+          '📧 Sync your emails first by going to the dashboard and clicking "Sync Gmail"',
+          '⏰ Make sure you have recent client communications (emails from the past 30 days work best)',
+          '🔑 Check that your Gmail permissions are properly configured',
+          '📱 If you communicate with clients on other platforms (Slack, WhatsApp), consider adding those as well',
+          '💡 For best results, we recommend having at least 5-10 recent client emails to analyze'
+        ],
+        next_steps: [
+          {
+            action: 'sync_emails',
+            label: 'Sync Gmail',
+            url: '/dashboard',
+            description: 'Import your recent emails for analysis'
+          },
+          {
+            action: 'check_integrations',
+            label: 'Add More Platforms',
+            url: '/integrations',
+            description: 'Connect additional communication platforms'
+          }
+        ]
+      }, { status: 404 })
+    }
+
+    logger.info('Analyzing emails for insights', { emailCount: emails.length })
+
+    // Check if we have sufficient emails for meaningful analysis
+    if (emails.length < 3) {
+      logger.warn('Limited emails for analysis - results may be less comprehensive', { count: emails.length })
     }
 
     const threadGroups = new Map()
@@ -321,10 +364,43 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ 
+    // Provide recommendations if insights are limited
+    const response: any = { 
       success: true, 
-      message: `Generated ${totalInsights} new insights` 
-    })
+      message: `Generated ${totalInsights} new insights`,
+      insights_count: totalInsights,
+      emails_analyzed: emails.length
+    }
+
+    if (totalInsights === 0) {
+      response.recommendations = [
+        '📧 Try syncing more recent emails - communication patterns may be harder to detect in older emails',
+        '🎯 Look for emails with clients asking questions, providing feedback, or discussing projects',
+        '📝 Check if your emails contain substantive conversations rather than just confirmations',
+        '🔄 Consider syncing emails from the past 2-4 weeks when client interactions are most active',
+        '📱 Add other communication platforms where you have client conversations'
+      ]
+      response.next_steps = [
+        {
+          action: 'sync_more_emails',
+          label: 'Sync More Recent Emails',
+          description: 'Try extending the sync period to capture more client conversations'
+        },
+        {
+          action: 'check_email_types',
+          label: 'Review Email Types',
+          description: 'Ensure you are analyzing emails with substantial client interactions'
+        }
+      ]
+    } else if (totalInsights < 3) {
+      response.suggestions = [
+        '✨ For richer insights, try syncing emails from multiple time periods',
+        '🎯 Focus on emails with detailed client feedback and project discussions',
+        '📊 More diverse client communications will provide better business intelligence'
+      ]
+    }
+
+    return NextResponse.json(response)
   } catch (error) {
     return handleAPIError(error)
   }

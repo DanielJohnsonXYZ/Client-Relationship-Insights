@@ -34,7 +34,7 @@ const AVAILABLE_INTEGRATIONS: Integration[] = [
     name: 'Slack',
     description: 'Monitor client conversations and team communications',
     icon: '💬',
-    status: 'available',
+    status: 'coming_soon',
     category: 'messaging',
     features: ['Channel monitoring', 'DM analysis', 'Client mentions']
   },
@@ -43,7 +43,7 @@ const AVAILABLE_INTEGRATIONS: Integration[] = [
     name: 'Microsoft Teams',
     description: 'Analyze video calls and chat messages with clients',
     icon: '🎥',
-    status: 'available',
+    status: 'coming_soon',
     category: 'messaging',
     features: ['Chat analysis', 'Meeting insights', 'File sharing tracking']
   },
@@ -52,7 +52,7 @@ const AVAILABLE_INTEGRATIONS: Integration[] = [
     name: 'WhatsApp Business',
     description: 'Track client communications on WhatsApp',
     icon: '📱',
-    status: 'available',
+    status: 'coming_soon',
     category: 'messaging',
     features: ['Message analysis', 'Business conversations', 'Response time tracking']
   },
@@ -254,9 +254,16 @@ export default function IntegrationsPage() {
                   <Button 
                     variant="ghost" 
                     size="sm"
-                    onClick={() => router.push(`/integrations/${integration.id}`)}
+                    onClick={() => {
+                      if (integration.id === 'gmail') {
+                        router.push('/dashboard')
+                        showToast('Use the dashboard to sync and manage Gmail data', 'info')
+                      } else {
+                        router.push(`/integrations/${integration.id}`)
+                      }
+                    }}
                   >
-                    Settings
+                    {integration.id === 'gmail' ? 'Manage' : 'Settings'}
                   </Button>
                 </div>
               ) : integration.status === 'available' ? (
