@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
     const user = await getAuthenticatedUser()
 
     const body = await request.json()
-    const { insightId, rating } = validateRequest(feedbackSchema, body)
+    const { insightId, feedback } = validateRequest(feedbackSchema, body)
 
     // Verify the insight belongs to the user
     const supabase = getSupabaseServer()
@@ -29,11 +29,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Update insight with feedback
-    const feedbackValue = rating >= 4 ? 'positive' : 'negative'
     const { error } = await (supabase as any)
       .from('insights')
       .update({
-        feedback: feedbackValue
+        feedback: feedback
       })
       .eq('id', insightId)
 

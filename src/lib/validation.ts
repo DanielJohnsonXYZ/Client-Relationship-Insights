@@ -59,6 +59,12 @@ export function sanitizeText(text: string, maxLength: number = 1000): string {
     .substring(0, maxLength)
 }
 
+export function parseEmailFromHeader(headerValue: string): string {
+  // Extract email from headers like "Name <email@domain.com>" or just "email@domain.com"
+  const match = headerValue.match(/<([^>]+)>/) || headerValue.match(/([^\s<>]+@[^\s<>]+)/)
+  return match ? match[1].trim() : headerValue.trim()
+}
+
 export function validateEmailAddress(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   return emailRegex.test(email) && email.length <= 255

@@ -15,16 +15,19 @@ export async function GET(_request: NextRequest) {
       .limit(1)
 
     const dbStatus = error ? 'error' : 'healthy'
+    const overallStatus = error ? 'error' : 'healthy'
+    const statusCode = error ? 503 : 200
     
     return NextResponse.json({
-      status: 'healthy',
+      status: overallStatus,
       timestamp: new Date().toISOString(),
       services: {
         database: dbStatus,
         api: 'healthy'
       },
-      environment: process.env.NODE_ENV
-    })
+      environment: process.env.NODE_ENV,
+      ...(error && { error: 'Database connection failed' })
+    }, { status: statusCode })
   } catch (_error) {
     return NextResponse.json({
       status: 'error',

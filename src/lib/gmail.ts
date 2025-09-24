@@ -1,5 +1,5 @@
 import { google } from 'googleapis'
-import { sanitizeEmailContent, validateEmailAddress, validateGmailId } from './validation'
+import { sanitizeEmailContent, validateEmailAddress, validateGmailId, parseEmailFromHeader } from './validation'
 import { logger } from './logger'
 
 // Configuration constants
@@ -68,20 +68,32 @@ export async function fetchRecentEmails(accessToken: string, days: number = GMAI
 
         const sanitizedBody = sanitizeEmailContent(body)
         
-        // Skip emails with invalid email addresses
-        if (!validateEmailAddress(from) || !validateEmailAddress(to)) {
-          logger.warn('Invalid email addresses, skipping email', { from, to })
+        // Parse email addresses from headers and validate
+        const fromEmail = parseEmailFromHeader(from)
+        const toEmail = parseEmailFromHeader(to)
+        
+        if (!validateEmailAddress(fromEmail) || !validateEmailAddress(toEmail)) {
+          logger.warn('Invalid email addresses, skipping email', { from: fromEmail, to: toEmail })
           continue
+        }
+
+        // Handle missing or invalid date headers
+        let emailTimestamp: string
+        try {
+          emailTimestamp = date ? new Date(date).toISOString() : new Date().toISOString()
+        } catch (error) {
+          logger.warn('Invalid date header, using current time', { date, error })
+          emailTimestamp = new Date().toISOString()
         }
 
         emails.push({
           gmail_id: message.id!,
           thread_id: emailData.data.threadId || message.id!,
-          from_email: from,
-          to_email: to,
+          from_email: fromEmail,
+          to_email: toEmail,
           subject: subject.substring(0, 500), // Limit subject length
           body: sanitizedBody,
-          timestamp: new Date(date).toISOString(),
+          timestamp: emailTimestamp,
         })
 
       } catch (error) {

@@ -187,15 +187,27 @@ export async function POST(request: NextRequest) {
     for (const [, threadEmails] of threadGroups) {
       // Process all emails, including single emails that can contain valuable insights
 
+      // Get client information if available
+      const firstEmail = threadEmails[0]
+      let clientInfo = null
+      if (firstEmail.client_id) {
+        const { data: client } = await supabase
+          .from('clients')
+          .select('name, company, current_project')
+          .eq('id', firstEmail.client_id)
+          .single()
+        clientInfo = client
+      }
+
       const emailContext = threadEmails.map((email: EmailRecord) => ({
         subject: email.subject,
         from_email: email.from_email,
         to_email: email.to_email,
         body: email.body,
         timestamp: email.timestamp,
-        client_name: undefined, // Will be populated when migration is run
-        client_company: undefined,
-        current_project: undefined
+        client_name: clientInfo?.name,
+        client_company: clientInfo?.company,
+        current_project: clientInfo?.current_project
       }))
 
       let result: { insights: InsightResult[], rawOutput: string }
@@ -208,40 +220,95 @@ export async function POST(request: NextRequest) {
       const { insights, rawOutput } = result
       const mostRecentEmail = threadEmails[0]
 
-      // If we have structured insights, store them individually
+      // If we have structured insights, store them individually with upsert to prevent duplicates
       if (insights.length > 0) {
         for (const insight of insights) {
-          const { error: insertError } = await (supabase as any)
+          // First, check if insight already exists for this email and category
+          const { data: existingInsights } = await supabase
             .from('insights')
-            .insert({
-              email_id: mostRecentEmail.id!,
-              category: insight.category,
-              summary: insight.summary,
-              evidence: insight.evidence,
-              suggested_action: insight.suggested_action,
-              confidence: insight.confidence,
-              raw_output: rawOutput
-            })
+            .select('id')
+            .eq('email_id', mostRecentEmail.id!)
+            .eq('category', insight.category)
+            .limit(1)
 
-          if (insertError) {
-            logger.warn('Failed to insert insight', { error: insertError, email_id: mostRecentEmail.id })
+          if (existingInsights && existingInsights.length > 0) {
+            // Update existing insight
+            const { error: updateError } = await (supabase as any)
+              .from('insights')
+              .update({
+                summary: insight.summary,
+                evidence: insight.evidence,
+                suggested_action: insight.suggested_action,
+                confidence: insight.confidence,
+                raw_output: rawOutput,
+                created_at: new Date().toISOString()
+              })
+              .eq('id', existingInsights[0].id)
+
+            if (updateError) {
+              logger.warn('Failed to update existing insight', updateError, { email_id: mostRecentEmail.id })
+            } else {
+              totalInsights++
+            }
           } else {
-            totalInsights++
+            // Insert new insight
+            const { error: insertError } = await (supabase as any)
+              .from('insights')
+              .insert({
+                email_id: mostRecentEmail.id!,
+                category: insight.category,
+                summary: insight.summary,
+                evidence: insight.evidence,
+                suggested_action: insight.suggested_action,
+                confidence: insight.confidence,
+                raw_output: rawOutput
+              })
+
+            if (insertError) {
+              logger.warn('Failed to insert insight', insertError, { email_id: mostRecentEmail.id })
+            } else {
+              totalInsights++
+            }
           }
         }
       } else {
         // If no structured insights but we have raw output, store just the raw output
-        const { error: insertError } = await (supabase as any)
+        // Check if any insight exists for this email first
+        const { data: existingInsights } = await supabase
           .from('insights')
-          .insert({
-            email_id: mostRecentEmail.id!,
-            raw_output: rawOutput
-          })
+          .select('id')
+          .eq('email_id', mostRecentEmail.id!)
+          .limit(1)
 
-        if (insertError) {
-          logger.warn('Failed to insert raw insight', { error: insertError, email_id: mostRecentEmail.id })
+        if (existingInsights && existingInsights.length > 0) {
+          // Update existing insight with new raw output
+          const { error: updateError } = await (supabase as any)
+            .from('insights')
+            .update({
+              raw_output: rawOutput,
+              created_at: new Date().toISOString()
+            })
+            .eq('id', existingInsights[0].id)
+
+          if (updateError) {
+            logger.warn('Failed to update raw insight', updateError, { email_id: mostRecentEmail.id })
+          } else {
+            totalInsights++
+          }
         } else {
-          totalInsights++
+          // Insert new raw insight
+          const { error: insertError } = await (supabase as any)
+            .from('insights')
+            .insert({
+              email_id: mostRecentEmail.id!,
+              raw_output: rawOutput
+            })
+
+          if (insertError) {
+            logger.warn('Failed to insert raw insight', insertError, { email_id: mostRecentEmail.id })
+          } else {
+            totalInsights++
+          }
         }
       }
     }
