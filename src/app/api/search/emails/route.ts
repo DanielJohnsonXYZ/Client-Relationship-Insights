@@ -72,8 +72,8 @@ export async function GET(request: NextRequest) {
     }
 
     // Get insights for these emails
-    const emailIds = emails?.map(email => email.id) || []
-    let insights = []
+    const emailIds = emails?.map((email: { id: string }) => email.id) || []
+    let insights: any[] = []
 
     if (emailIds.length > 0) {
       const { data: insightData } = await supabase
@@ -92,9 +92,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Combine emails with their insights
-    const emailsWithInsights = emails?.map(email => ({
+    const emailsWithInsights = emails?.map((email: any) => ({
       ...email,
-      insights: insights.filter(insight => insight.email_id === email.id)
+      insights: insights.filter((insight: any) => insight.email_id === email.id)
     })) || []
 
     return NextResponse.json({

@@ -1,6 +1,5 @@
 import { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
-import BasecampProvider from './basecamp-provider'
 import { getGoogleCreds, getBasecampCreds, getNextAuthConfig } from './env'
 
 function getAuthOptionsInternal(): NextAuthOptions {
@@ -20,15 +19,7 @@ function getAuthOptionsInternal(): NextAuthOptions {
     })
   ]
 
-  // Add Basecamp provider if credentials are available
-  if (basecampCreds) {
-    providers.push(
-      BasecampProvider({
-        clientId: basecampCreds.clientId,
-        clientSecret: basecampCreds.clientSecret,
-      })
-    )
-  }
+  // Basecamp provider removed for now
 
   return {
     providers,
@@ -40,10 +31,6 @@ function getAuthOptionsInternal(): NextAuthOptions {
             token.googleAccessToken = account.access_token
             token.googleRefreshToken = account.refresh_token
             token.googleExpiresAt = account.expires_at ? account.expires_at * 1000 : Date.now() + 3600000
-          } else if (account.provider === 'basecamp') {
-            token.basecampAccessToken = account.access_token
-            token.basecampRefreshToken = account.refresh_token
-            token.basecampAccounts = user.basecampAccounts
           }
           
           token.userId = user.id
@@ -70,9 +57,6 @@ function getAuthOptionsInternal(): NextAuthOptions {
           ...session,
           // Primary provider (Google) for backwards compatibility
           accessToken: (token.googleAccessToken || token.accessToken) as string,
-          // Additional provider tokens
-          basecampAccessToken: token.basecampAccessToken as string | undefined,
-          basecampAccounts: token.basecampAccounts as any[] | undefined,
           userId: token.userId as string,
           user: {
             ...session.user,
