@@ -85,6 +85,21 @@ export function getGoogleCreds(): { clientId: string; clientSecret: string } {
   }
 }
 
+export function getBasecampCreds(): { clientId: string; clientSecret: string } | null {
+  const clientId = process.env.BASECAMP_CLIENT_ID
+  const clientSecret = process.env.BASECAMP_CLIENT_SECRET
+
+  if (!clientId || !clientSecret) {
+    // Basecamp is optional, return null if not configured
+    return null
+  }
+
+  return {
+    clientId,
+    clientSecret,
+  }
+}
+
 export function getNextAuthConfig(): { secret: string; url: string } {
   const secret = process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET
   const url = process.env.NEXTAUTH_URL || 'http://localhost:3000'
