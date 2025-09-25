@@ -75,7 +75,7 @@ export async function GET(request: NextRequest) {
         .select('id')
         .eq('user_id', user.id)
       
-      const userEmailIds = new Set(userEmails?.map(e => e.id) || [])
+      const userEmailIds = new Set(userEmails?.map((e: { id: string }) => e.id) || [])
       const userInsights = insights.filter(insight => userEmailIds.has(insight.email_id))
       
       return NextResponse.json({ insights: userInsights })
