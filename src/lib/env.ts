@@ -10,7 +10,7 @@ export interface PublicEnv {
 
 export interface ServerEnv {
   supabaseUrl: string
-  supabaseAnonKey: string
+  supabaseServiceRoleKey: string
 }
 
 export interface AdminEnv {
@@ -33,17 +33,16 @@ export function getPublicEnv(): PublicEnv {
 }
 
 export function getServerEnv(): ServerEnv {
-  // In server context, prefer explicit server vars, fall back to public vars
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL
-  const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-  if (!supabaseUrl || !supabaseAnonKey) {
-    throw new Error('Missing required server environment variables: SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL), SUPABASE_ANON_KEY (or NEXT_PUBLIC_SUPABASE_ANON_KEY)')
+  if (!supabaseUrl || !supabaseServiceRoleKey) {
+    throw new Error('Missing required server environment variables: SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL), SUPABASE_SERVICE_ROLE_KEY')
   }
 
   return {
     supabaseUrl,
-    supabaseAnonKey,
+    supabaseServiceRoleKey,
   }
 }
 

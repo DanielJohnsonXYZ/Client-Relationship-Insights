@@ -19,6 +19,7 @@ interface Insight {
   suggested_action?: string
   confidence?: number
   feedback?: 'positive' | 'negative' | null
+  raw_output?: string
   created_at: string
 }
 

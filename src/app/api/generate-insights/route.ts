@@ -5,6 +5,7 @@ import { getAuthenticatedUser } from '@/lib/auth'
 import { handleAPIError, createAPIError } from '@/lib/api-errors'
 import { sanitizeForAI } from '@/lib/validation'
 import { validateRequest, generateInsightsSchema } from '@/lib/request-validation'
+import { validateInsights } from '@/lib/insight-validation'
 import type { EmailRecord, InsightRecord, ClientRecord, SupabaseResponse, SupabaseListResponse } from '@/types/database'
 import { logger } from '@/lib/logger'
 
@@ -79,7 +80,7 @@ ${emailContext}
 BE FLEXIBLE AND INSIGHTFUL: Don't just look for predefined categories. Identify whatever seems important or noteworthy about these client relationships. Focus on actionable insights that would help a business owner manage their client relationships better.
 
 For each insight you identify, provide a JSON object with:
-- category: Choose the most appropriate from "Risk", "Upsell", "Alignment", "Note", or create a custom category if needed
+- category: Must be exactly one of: "Risk", "Upsell", "Alignment", or "Note"
 - summary: A clear, actionable summary of the insight
 - evidence: A direct quote or reference from the email that supports this insight
 - suggested_action: A specific, practical action the user should take
@@ -130,15 +131,23 @@ Example format:
       if (jsonStart !== -1 && jsonEnd !== -1) {
         try {
           const jsonString = content.text.slice(jsonStart, jsonEnd)
-          const insights = JSON.parse(jsonString)
+          const rawInsights = JSON.parse(jsonString)
           
-          logger.info('🤖 AI Insights Parsed', { 
-            insightCount: insights.length,
-            categories: insights.map((i: any) => i.category),
-            insights: process.env.NODE_ENV === 'development' ? insights : '[REDACTED IN PRODUCTION]'
+          // Validate and sanitize insights using Zod schema
+          const validatedInsights = validateInsights(Array.isArray(rawInsights) ? rawInsights : [rawInsights])
+          
+          logger.info('🤖 AI Insights Parsed and Validated', { 
+            rawInsightCount: Array.isArray(rawInsights) ? rawInsights.length : 1,
+            validInsightCount: validatedInsights.length,
+            categories: validatedInsights.map(i => i.category),
+            validatedInsights: process.env.NODE_ENV === 'development' ? validatedInsights : '[REDACTED IN PRODUCTION]'
           })
           
-          return { insights, rawOutput }
+          if (validatedInsights.length === 0) {
+            logger.warn('No valid insights after validation', { rawInsights })
+          }
+          
+          return { insights: validatedInsights, rawOutput }
         } catch (parseError) {
           logger.warn('Failed to parse JSON from AI response, storing raw output', { parseError, jsonString: content.text.slice(jsonStart, jsonEnd) })
           return { insights: [], rawOutput }
@@ -283,16 +292,16 @@ export async function POST(request: NextRequest) {
             .limit(1)
 
           if (existingInsights && existingInsights.length > 0) {
-            // Update existing insight
+            // Update existing insight (don't overwrite created_at)
             const { error: updateError } = await (supabase as any)
               .from('insights')
               .update({
+                client_id: mostRecentEmail.client_id || null,
                 summary: insight.summary,
                 evidence: insight.evidence,
                 suggested_action: insight.suggested_action,
                 confidence: insight.confidence,
-                raw_output: rawOutput,
-                created_at: new Date().toISOString()
+                raw_output: rawOutput
               })
               .eq('id', existingInsights[0].id)
 
@@ -307,6 +316,7 @@ export async function POST(request: NextRequest) {
               .from('insights')
               .insert({
                 email_id: mostRecentEmail.id!,
+                client_id: mostRecentEmail.client_id || null,
                 category: insight.category,
                 summary: insight.summary,
                 evidence: insight.evidence,

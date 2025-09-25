@@ -58,17 +58,43 @@ export async function fetchRecentEmails(accessToken: string, days: number = GMAI
         const to = headers.find(h => h.name === 'To')?.value || ''
         const date = headers.find(h => h.name === 'Date')?.value || ''
 
-        let body = ''
-        if (emailData.data.payload?.body?.data) {
-          body = Buffer.from(emailData.data.payload.body.data, 'base64').toString()
-        } else if (emailData.data.payload?.parts) {
-          for (const part of emailData.data.payload.parts) {
-            if (part.mimeType === 'text/plain' && part.body?.data) {
-              body = Buffer.from(part.body.data, 'base64').toString()
-              break
-            }
+        // Extract body content recursively from nested parts
+        const extractBodyContent = (payload: any): string => {
+          if (payload.body?.data) {
+            return Buffer.from(payload.body.data, 'base64').toString()
           }
+          
+          if (payload.parts) {
+            // Try to find text/plain first, fallback to text/html
+            let plainText = ''
+            let htmlText = ''
+            
+            for (const part of payload.parts) {
+              if (part.mimeType === 'text/plain' && part.body?.data) {
+                plainText = Buffer.from(part.body.data, 'base64').toString()
+              } else if (part.mimeType === 'text/html' && part.body?.data) {
+                htmlText = Buffer.from(part.body.data, 'base64').toString()
+              } else if (part.parts) {
+                // Recursively check nested parts
+                const nestedContent = extractBodyContent(part)
+                if (nestedContent) {
+                  if (part.mimeType?.includes('text/plain')) {
+                    plainText = nestedContent
+                  } else if (part.mimeType?.includes('text/html')) {
+                    htmlText = nestedContent
+                  }
+                }
+              }
+            }
+            
+            // Prefer plain text, fallback to HTML (will be sanitized later)
+            return plainText || htmlText
+          }
+          
+          return ''
         }
+
+        const body = extractBodyContent(emailData.data.payload)
 
         // Validate and sanitize email data
         if (!validateGmailId(message.id!)) {
