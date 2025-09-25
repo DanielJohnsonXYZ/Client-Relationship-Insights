@@ -18,7 +18,7 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseServer()
     
-    // Query insights with all columns including raw_output
+    // Query insights (raw_output column may not exist in production)
     let query = supabase
       .from('insights')
       .select(`
@@ -29,7 +29,6 @@ export async function GET(request: NextRequest) {
         suggested_action,
         confidence,
         feedback,
-        raw_output,
         created_at,
         email_id
       `)
