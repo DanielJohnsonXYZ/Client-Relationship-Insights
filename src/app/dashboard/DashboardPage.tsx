@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { useToast } from '@/components/ui/Toast'
 import { InsightsSkeleton } from '@/components/LoadingSkeleton'
+import { GmailAccountManager } from '@/components/GmailAccounts/GmailAccountManager'
 
 interface Insight {
   id: string
@@ -49,6 +50,7 @@ export function DashboardPage() {
   }>>([])
   const [logsLoading, setLogsLoading] = useState(false)
   const [logFilters, setLogFilters] = useState({ level: 'all', component: 'all' })
+  const [selectedGmailAccount, setSelectedGmailAccount] = useState<string | null>(null)
   const { showToast, ToastContainer } = useToast()
 
   const fetchUserProfile = async () => {
@@ -85,7 +87,12 @@ export function DashboardPage() {
   const fetchInsights = async () => {
     setLoading(true)
     try {
-      const response = await fetch('/api/insights')
+      const params = new URLSearchParams()
+      if (selectedGmailAccount) {
+        params.set('gmail_account_id', selectedGmailAccount)
+      }
+      
+      const response = await fetch(`/api/insights?${params}`)
       if (response.ok) {
         const data = await response.json()
         setInsights(data.insights || [])
@@ -102,7 +109,7 @@ export function DashboardPage() {
     if (session) {
       fetchInsights()
     }
-  }, [session])
+  }, [session, selectedGmailAccount])
 
   const syncEmails = async () => {
     setSyncing(true)
@@ -288,6 +295,14 @@ export function DashboardPage() {
         </Card>
       </div>
 
+      {/* Gmail Account Management */}
+      <div className="mb-8">
+        <GmailAccountManager 
+          onAccountChange={setSelectedGmailAccount}
+          selectedAccountId={selectedGmailAccount}
+        />
+      </div>
+
       {/* Actions */}
       <Card className="mb-8">
         <CardHeader>
@@ -322,6 +337,15 @@ export function DashboardPage() {
               🔗 Add Integrations
             </Button>
           </div>
+          
+          {selectedGmailAccount && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Note:</strong> Currently viewing insights from selected Gmail account only.
+                Choose "All Accounts" above to see insights from all connected accounts.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 

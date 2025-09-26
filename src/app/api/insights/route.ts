@@ -15,6 +15,7 @@ export async function GET(request: NextRequest) {
     
     const { searchParams } = new URL(request.url)
     const clientId = searchParams.get('client_id')
+    const gmailAccountId = searchParams.get('gmail_account_id')
 
     const supabase = getSupabaseServer()
     
