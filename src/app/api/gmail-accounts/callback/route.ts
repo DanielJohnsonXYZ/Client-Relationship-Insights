@@ -60,7 +60,7 @@ export async function GET(request: NextRequest) {
     // Store Gmail account in database
     const supabase = getSupabaseServer()
 
-    const { error: dbError } = await supabase
+    const { error: dbError } = await (supabase as any)
       .from('gmail_accounts')
       .upsert({
         user_id,

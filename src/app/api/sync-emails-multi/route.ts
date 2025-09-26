@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
     if (gmail_account_id) {
       // Sync specific Gmail account
-      const { data: account } = await supabase
+      const { data: account } = await (supabase as any)
         .from('gmail_accounts')
         .select('*')
         .eq('id', gmail_account_id)
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
       accountsToSync = [account]
     } else {
       // Sync all active Gmail accounts
-      const { data: accounts } = await supabase
+      const { data: accounts } = await (supabase as any)
         .from('gmail_accounts')
         .select('*')
         .eq('user_id', session.user.id)
@@ -182,7 +182,7 @@ async function syncGmailAccount(account: any, supabase: any) {
         }
       }
     } catch (messageError) {
-      logger.warn(`Failed to process message ${message.id}:`, messageError)
+      logger.warn(`Failed to process message ${message.id}:`, { error: messageError })
       continue
     }
   }

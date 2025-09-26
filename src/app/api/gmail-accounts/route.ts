@@ -17,7 +17,7 @@ export async function GET() {
 
     const supabase = getSupabaseServer()
 
-    const { data: accounts, error } = await supabase
+    const { data: accounts, error } = await (supabase as any)
       .from('gmail_accounts')
       .select(`
         id,
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
     const supabase = getSupabaseServer()
 
     // Check if this Gmail account is already connected
-    const { data: existing } = await supabase
+    const { data: existing } = await (supabase as any)
       .from('gmail_accounts')
       .select('id')
       .eq('user_id', session.user.id)
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
 
     if (existing) {
       // Update existing account
-      const { data: account, error } = await supabase
+      const { data: account, error } = await (supabase as any)
         .from('gmail_accounts')
         .update({
           access_token,
@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
       })
     } else {
       // Insert new account
-      const { data: account, error } = await supabase
+      const { data: account, error } = await (supabase as any)
         .from('gmail_accounts')
         .insert({
           user_id: session.user.id,
