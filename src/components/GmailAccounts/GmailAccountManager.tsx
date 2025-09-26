@@ -38,7 +38,14 @@ export function GmailAccountManager({ onAccountChange, selectedAccountId }: Gmai
         const data = await response.json()
         setAccounts(data.accounts || [])
       } else {
-        showToast('Failed to load Gmail accounts', 'error')
+        const errorData = await response.json().catch(() => ({}))
+        if (errorData.error?.includes('gmail_accounts') && errorData.error?.includes('schema cache')) {
+          // Schema cache issue - table exists but Supabase hasn't refreshed cache yet
+          console.log('Gmail accounts table not in schema cache yet - this is normal after deployment')
+          setAccounts([])
+        } else {
+          showToast('Failed to load Gmail accounts', 'error')
+        }
       }
     } catch (error) {
       console.error('Error fetching Gmail accounts:', error)
