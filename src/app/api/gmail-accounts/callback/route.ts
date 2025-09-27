@@ -77,6 +77,10 @@ export async function GET(request: NextRequest) {
 
     if (dbError) {
       console.error('Failed to save Gmail account:', dbError)
+      // Handle schema cache issue
+      if (dbError.message?.includes('gmail_accounts') && dbError.message?.includes('schema cache')) {
+        return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/dashboard?error=schema_cache_delay`)
+      }
       return NextResponse.redirect(`${process.env.NEXTAUTH_URL}/dashboard?error=database_save_failed`)
     }
 

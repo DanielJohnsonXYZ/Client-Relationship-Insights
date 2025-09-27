@@ -31,6 +31,11 @@ export async function GET() {
       .order('created_at', { ascending: true })
 
     if (error) {
+      // Handle schema cache issue - table exists but not in cache yet
+      if (error.message.includes('gmail_accounts') && error.message.includes('schema cache')) {
+        console.log('Gmail accounts table not in schema cache yet - returning empty array')
+        return NextResponse.json({ accounts: [] })
+      }
       throw new Error(`Failed to fetch Gmail accounts: ${error.message}`)
     }
 
