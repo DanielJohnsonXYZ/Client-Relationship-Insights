@@ -1,14 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 import { getPublicEnv } from './env'
+import type { Database, TypedSupabaseClient } from '@/types/supabase'
 
-let cachedBrowserClient: ReturnType<typeof createClient> | null = null
+let cachedBrowserClient: TypedSupabaseClient | null = null
 
-export function getSupabaseBrowser() {
+export function getSupabaseBrowser(): TypedSupabaseClient {
   if (cachedBrowserClient) return cachedBrowserClient
 
   const { supabaseUrl, supabaseAnonKey } = getPublicEnv()
 
-  cachedBrowserClient = createClient(supabaseUrl, supabaseAnonKey, {
+  cachedBrowserClient = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,

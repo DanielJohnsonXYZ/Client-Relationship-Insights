@@ -1,38 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getSupabaseServer } from '@/lib/supabase-server'
+import { runHealthChecks } from '@/lib/health'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 export async function GET(_request: NextRequest) {
   try {
-    const supabase = getSupabaseServer()
-    
-    // Test database connection
-    const { data: _data, error } = await supabase
-      .from('emails')
-      .select('count')
-      .limit(1)
+    const healthResult = await runHealthChecks()
+    const statusCode = healthResult.status === 'healthy' ? 200 : 503
 
-    const dbStatus = error ? 'error' : 'healthy'
-    const overallStatus = error ? 'error' : 'healthy'
-    const statusCode = error ? 503 : 200
-    
-    return NextResponse.json({
-      status: overallStatus,
-      timestamp: new Date().toISOString(),
-      services: {
-        database: dbStatus,
-        api: 'healthy'
+    return NextResponse.json(
+      {
+        ...healthResult,
+        environment: process.env.NODE_ENV,
       },
-      environment: process.env.NODE_ENV,
-      ...(error && { error: 'Database connection failed' })
-    }, { status: statusCode })
-  } catch (_error) {
-    return NextResponse.json({
-      status: 'error',
-      timestamp: new Date().toISOString(),
-      error: 'Health check failed'
-    }, { status: 500 })
+      { status: statusCode }
+    )
+  } catch (error) {
+    return NextResponse.json(
+      {
+        status: 'unhealthy',
+        timestamp: new Date().toISOString(),
+        error: 'Health check failed',
+        checks: {
+          database: {
+            status: 'down',
+            error: error instanceof Error ? error.message : 'Unknown error',
+          },
+          environment: {
+            status: 'missing',
+          },
+        },
+      },
+      { status: 500 }
+    )
   }
 }

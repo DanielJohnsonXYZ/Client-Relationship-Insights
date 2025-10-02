@@ -1,15 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
 import { getServerEnv } from './env'
+import type { Database, TypedSupabaseClient } from '@/types/supabase'
 
-let cachedServerClient: ReturnType<typeof createClient> | null = null
+let cachedServerClient: TypedSupabaseClient | null = null
 
-export function getSupabaseServer() {
+export function getSupabaseServer(): TypedSupabaseClient {
   if (cachedServerClient) return cachedServerClient
 
   const { supabaseUrl, supabaseServiceRoleKey } = getServerEnv()
 
   // Use service role key to bypass RLS for server operations
-  cachedServerClient = createClient(supabaseUrl, supabaseServiceRoleKey, {
+  cachedServerClient = createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false

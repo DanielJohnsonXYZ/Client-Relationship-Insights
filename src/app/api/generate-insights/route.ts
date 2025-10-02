@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSupabaseServer } from '@/lib/supabase-server'
-import { getAnthropic } from '@/lib/anthropic'
+import { createMessageWithRetry } from '@/lib/anthropic'
 import { getAuthenticatedUser } from '@/lib/auth'
 import { handleAPIError, createAPIError } from '@/lib/api-errors'
 import { sanitizeForAI } from '@/lib/validation'
@@ -30,8 +30,6 @@ async function generateInsights(emails: Array<{
   client_company?: string
   current_project?: string
 }>): Promise<{ insights: InsightResult[], rawOutput: string }> {
-  const anthropic = getAnthropic()
-  
   // Limit emails for processing
   const sanitizedEmails = emails.slice(0, 10)
   
@@ -109,7 +107,7 @@ Example format:
   })
 
   try {
-    const message = await anthropic.messages.create({
+    const message = await createMessageWithRetry({
       model: 'claude-3-5-sonnet-20241022',
       max_tokens: 2000,
       messages: [{ role: 'user', content: prompt }]
