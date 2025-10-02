@@ -88,12 +88,12 @@ export function validateExternalResponse<T>(
   } catch (error) {
     if (error instanceof z.ZodError) {
       logger.error(`Invalid response from ${source}`, error, {
-        errors: error.errors,
+        errors: error.issues,
         receivedData: JSON.stringify(data).substring(0, 500),
       })
 
       throw new Error(
-        `Invalid response from ${source}: ${error.errors.map(e => e.message).join(', ')}`
+        `Invalid response from ${source}: ${error.issues.map(e => e.message).join(', ')}`
       )
     }
 
@@ -116,13 +116,13 @@ export function safeParseExternalResponse<T>(
   }
 
   logger.warn(`Failed to parse response from ${source}`, {
-    errors: result.error.errors,
+    errors: result.error.issues,
     receivedData: JSON.stringify(data).substring(0, 500),
   })
 
   return {
     success: false,
-    error: result.error.errors.map(e => e.message).join(', '),
+    error: result.error.issues.map(e => e.message).join(', '),
   }
 }
 

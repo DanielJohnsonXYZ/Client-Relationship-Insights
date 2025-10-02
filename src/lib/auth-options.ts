@@ -2,7 +2,7 @@ import { NextAuthOptions } from 'next-auth'
 import GoogleProvider from 'next-auth/providers/google'
 import { getGoogleCreds, getBasecampCreds, getNextAuthConfig } from './env'
 
-function getAuthOptionsInternal(): NextAuthOptions {
+export function getAuthOptions(): NextAuthOptions {
   const googleCreds = getGoogleCreds()
   const basecampCreds = getBasecampCreds()
   const { secret } = getNextAuthConfig()
@@ -32,19 +32,19 @@ function getAuthOptionsInternal(): NextAuthOptions {
             token.googleRefreshToken = account.refresh_token
             token.googleExpiresAt = account.expires_at ? account.expires_at * 1000 : Date.now() + 3600000
           }
-          
+
           token.userId = user.id
           // Keep backwards compatibility for Google (primary provider)
           token.accessToken = account.provider === 'google' ? account.access_token : token.accessToken
         }
-        
+
         // Check if Google token is expired (primary provider)
         if (token.googleExpiresAt && Date.now() > (token.googleExpiresAt as number)) {
           console.warn('Google access token expired, requesting fresh sign-in')
           // Return empty token to force sign out
           return {}
         }
-        
+
         return token
       },
       async session({ session, token }) {
@@ -52,7 +52,7 @@ function getAuthOptionsInternal(): NextAuthOptions {
           // No Google access token means user needs to sign in again
           return null as any
         }
-        
+
         return {
           ...session,
           // Primary provider (Google) for backwards compatibility
@@ -76,4 +76,21 @@ function getAuthOptionsInternal(): NextAuthOptions {
   }
 }
 
-export const authOptions = getAuthOptionsInternal()
+// For backwards compatibility and ease of use
+// Note: This will be called at runtime only when the auth route is accessed
+let _authOptions: NextAuthOptions | null = null
+
+export function getAuthOptionsLazy(): NextAuthOptions {
+  if (!_authOptions) {
+    _authOptions = getAuthOptions()
+  }
+  return _authOptions
+}
+
+// For direct use in API routes (lazy evaluation)
+export const authOptions = new Proxy({} as NextAuthOptions, {
+  get(target, prop) {
+    const options = getAuthOptionsLazy()
+    return (options as any)[prop]
+  }
+})
