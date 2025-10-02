@@ -22,7 +22,11 @@ export async function createMessageWithRetry(
   const anthropic = getAnthropic()
 
   return retry(
-    () => anthropic.messages.create(params),
+    async () => {
+      const response = await anthropic.messages.create(params)
+      // Ensure we return a Message, not a Stream
+      return response as Message
+    },
     {
       maxAttempts: 3,
       initialDelayMs: 1000,
