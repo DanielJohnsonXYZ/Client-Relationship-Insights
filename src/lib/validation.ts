@@ -28,7 +28,8 @@ export const feedbackSchema = z.object({
 
 // Validation functions
 export function validateUUID(id: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  // Accept all UUID versions (v1-v5), not just v4
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
   return uuidRegex.test(id)
 }
 
@@ -52,9 +53,11 @@ export function sanitizeEmailContent(content: string): string {
 
 export function sanitizeText(text: string, maxLength: number = 1000): string {
   if (!text) return ''
-  
+
+  // Remove HTML tags (complete tag removal, not just angle brackets)
   return text
-    .replace(/[<>]/g, '')
+    .replace(/<[^>]*>/g, '') // Remove complete HTML tags
+    .replace(/[<>]/g, '') // Remove any remaining angle brackets
     .trim()
     .substring(0, maxLength)
 }

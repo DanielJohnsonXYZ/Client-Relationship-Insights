@@ -6,7 +6,7 @@ import { handleAPIError, createAPIError } from '@/lib/api-errors'
 import { sanitizeForAI } from '@/lib/validation'
 import { validateRequest, generateInsightsSchema } from '@/lib/request-validation'
 import { validateInsights } from '@/lib/insight-validation'
-import type { EmailRecord, InsightRecord, ClientRecord, SupabaseResponse, SupabaseListResponse } from '@/types/database'
+import type { EmailRecord, SupabaseListResponse, SupabaseResponse } from '@/types/database'
 import { logger } from '@/lib/logger'
 
 export const runtime = 'nodejs'
@@ -34,7 +34,8 @@ async function generateInsights(emails: Array<{
   const sanitizedEmails = emails.slice(0, 10)
   
   // Group emails by client and create context
-  const clientGroups = new Map<string, any[]>()
+  type EmailWithClient = typeof sanitizedEmails[number]
+  const clientGroups = new Map<string, EmailWithClient[]>()
   sanitizedEmails.forEach(email => {
     const clientKey = email.client_name || 'Unknown Client'
     if (!clientGroups.has(clientKey)) {
@@ -43,7 +44,7 @@ async function generateInsights(emails: Array<{
     clientGroups.get(clientKey)!.push(email)
   })
 
-  const emailContext = Array.from(clientGroups.entries()).map(([clientName, clientEmails]) => {
+  const emailContext = Array.from(clientGroups.entries()).map(([_clientName, clientEmails]) => {
     const clientInfo = clientEmails[0]
     const clientHeader = clientInfo.client_name ? 
       `CLIENT: ${clientInfo.client_name}${clientInfo.client_company ? ` (${clientInfo.client_company})` : ''}${clientInfo.current_project ? ` - Project: ${clientInfo.current_project}` : ''}` : 
@@ -170,7 +171,7 @@ export async function POST(request: NextRequest) {
     
     // Validate request body
     const body = await request.json().catch(() => ({}))
-    const { forceRegenerate: _forceRegenerate } = validateRequest(generateInsightsSchema, body)
+    validateRequest(generateInsightsSchema, body)
     
     const supabase = getSupabaseServer()
 
@@ -242,14 +243,18 @@ export async function POST(request: NextRequest) {
       let clientName: string | undefined
       let clientCompany: string | undefined
       let currentProject: string | undefined
-      
+
       if (firstEmail.client_id) {
-        const { data: client } = await (supabase as any)
+        const { data: client }: SupabaseResponse<{
+          name: string
+          company?: string
+          current_project?: string
+        }> = await supabase
           .from('clients')
           .select('name, company, current_project')
           .eq('id', firstEmail.client_id)
           .single()
-        
+
         if (client) {
           clientName = client.name
           clientCompany = client.company
@@ -271,7 +276,8 @@ export async function POST(request: NextRequest) {
       let result: { insights: InsightResult[], rawOutput: string }
       try {
         result = await generateInsights(emailContext)
-      } catch (_error) {
+      } catch (error) {
+        logger.error('AI generation failed', error)
         throw createAPIError('Failed to generate insights with AI', 503, 'AI_ERROR')
       }
 
@@ -282,7 +288,7 @@ export async function POST(request: NextRequest) {
       if (insights.length > 0) {
         for (const insight of insights) {
           // First, check if insight already exists for this email and category
-          const { data: existingInsights } = await (supabase as any)
+          const { data: existingInsights }: SupabaseListResponse<{ id: string }> = await supabase
             .from('insights')
             .select('id')
             .eq('email_id', mostRecentEmail.id!)
@@ -291,7 +297,7 @@ export async function POST(request: NextRequest) {
 
           if (existingInsights && existingInsights.length > 0) {
             // Update existing insight (don't overwrite created_at)
-            const { error: updateError } = await (supabase as any)
+            const { error: updateError } = await supabase
               .from('insights')
               .update({
                 client_id: mostRecentEmail.client_id || null,
@@ -310,7 +316,7 @@ export async function POST(request: NextRequest) {
             }
           } else {
             // Insert new insight
-            const { error: insertError } = await (supabase as any)
+            const { error: insertError } = await supabase
               .from('insights')
               .insert({
                 email_id: mostRecentEmail.id!,
@@ -333,7 +339,7 @@ export async function POST(request: NextRequest) {
       } else {
         // If no structured insights but we have raw output, store just the raw output
         // Check if any insight exists for this email first
-        const { data: existingInsights } = await (supabase as any)
+        const { data: existingInsights }: SupabaseListResponse<{ id: string }> = await supabase
           .from('insights')
           .select('id')
           .eq('email_id', mostRecentEmail.id!)
@@ -341,7 +347,7 @@ export async function POST(request: NextRequest) {
 
         if (existingInsights && existingInsights.length > 0) {
           // Update existing insight with new raw output
-          const { error: updateError } = await (supabase as any)
+          const { error: updateError } = await supabase
             .from('insights')
             .update({
               raw_output: rawOutput,
@@ -356,7 +362,7 @@ export async function POST(request: NextRequest) {
           }
         } else {
           // Insert new raw insight
-          const { error: insertError } = await (supabase as any)
+          const { error: insertError } = await supabase
             .from('insights')
             .insert({
               email_id: mostRecentEmail.id!,
@@ -373,8 +379,23 @@ export async function POST(request: NextRequest) {
     }
 
     // Provide recommendations if insights are limited
-    const response: any = { 
-      success: true, 
+    interface ResponseBody {
+      success: boolean
+      message: string
+      insights_count: number
+      emails_analyzed: number
+      recommendations?: string[]
+      next_steps?: Array<{
+        action: string
+        label: string
+        url?: string
+        description: string
+      }>
+      suggestions?: string[]
+    }
+
+    const response: ResponseBody = {
+      success: true,
       message: `Generated ${totalInsights} new insights`,
       insights_count: totalInsights,
       emails_analyzed: emails.length

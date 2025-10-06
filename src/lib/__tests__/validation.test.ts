@@ -19,7 +19,7 @@ describe('validation utilities', () => {
 
     it('should reject invalid UUIDs', () => {
       expect(validateUUID('not-a-uuid')).toBe(false)
-      expect(validateUUID('550e8400-e29b-51d4-a716-446655440000')).toBe(false) // Wrong version
+      expect(validateUUID('550e8400-e29b-61d4-a716-446655440000')).toBe(false) // Wrong version (v6 doesn't exist in standard)
       expect(validateUUID('')).toBe(false)
     })
   })
